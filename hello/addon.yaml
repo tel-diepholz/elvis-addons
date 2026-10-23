@@ -1,0 +1,47 @@
+# Beispiel-Addon: zeigt den kompletten Ablauf (Optionen → Formular, Ports, Volumes, Jobs).
+id: hello
+name: Hallo ELVIS
+version: 1.0.0
+description: Kleiner Test-Webserver, der den eingestellten Namen ausgibt. Zum Ausprobieren der Addon-Verwaltung.
+icon: box
+arch: [amd64, arm64]
+
+options:
+  name:
+    type: string
+    label: Name
+    help: Wird vom Webserver unter „Name“ ausgegeben.
+    default: ELW 2
+    required: true
+    maxLength: 40
+  port:
+    type: int
+    label: Port auf dem Host
+    default: 8099
+    min: 1024
+    max: 65535
+  verbose:
+    type: bool
+    label: Ausführliches Protokoll
+    default: false
+
+containers:
+  - name: web
+    image: traefik/whoami:v1.10
+    env:
+      WHOAMI_NAME: "{{options.name}}"
+      WHOAMI_PORT_NUMBER: "8080"
+      WHOAMI_VERBOSE: "{{options.verbose}}"
+    ports:
+      - container: 8080
+        host: "{{options.port}}"
+
+jobs:
+  stamp:
+    label: Zeitstempel schreiben
+    description: Schreibt Datum und Namen in das Daten-Volume und gibt die Datei aus.
+    image: alpine:3.20
+    command: ["sh", "-c", "echo \"$(date -Iseconds) {{options.name}}\" >> /data/stamps.txt && cat /data/stamps.txt"]
+    volumes:
+      - name: data
+        target: /data

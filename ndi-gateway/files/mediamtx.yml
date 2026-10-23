@@ -1,0 +1,39 @@
+# MediaMTX für das NDI-Gateway: nimmt die Ströme des Gateways per RTSP von localhost an und
+# verteilt sie per WebRTC an Browser. Ports und Adressen setzt das Addon über MTX_*-Umgebungsvariablen.
+logLevel: info
+
+# Einspeisen nur vom Gateway auf demselben Host, Ansehen für alle im Netz
+authInternalUsers:
+  - user: any
+    pass:
+    ips: ["127.0.0.1", "::1"]
+    permissions:
+      - action: publish
+        path:
+  - user: any
+    pass:
+    ips: []
+    permissions:
+      - action: read
+        path:
+
+api: false
+metrics: false
+pprof: false
+playback: false
+rtmp: false
+hls: false
+srt: false
+
+rtsp: true
+rtspTransports: [tcp]
+rtspAddress: 127.0.0.1:8554
+
+webrtc: true
+webrtcAddress: :8889
+webrtcLocalUDPAddress: :8189
+webrtcLocalTCPAddress: :8189
+webrtcIPsFromInterfaces: true
+
+paths:
+  all_others:

@@ -1,0 +1,6 @@
+name: ELVIS (eingebaut)
+maintainer: ELVIS
+addons:
+  - hello
+  - kartenserver
+  - ndi-gateway

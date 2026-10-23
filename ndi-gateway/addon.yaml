@@ -1,0 +1,172 @@
+# NDI-Gateway: empfängt NDI-Quellen im Netz, kodiert sie als H.264 und stellt sie per WebRTC (MediaMTX)
+# für Browser bereit – z. B. als Kachel „Video (NDI)“ auf den Bildschirmen.
+id: ndi-gateway
+name: NDI-Gateway
+version: 1.0.2
+description: >-
+  Macht NDI-Quellen im Browser sichtbar: Das Gateway findet NDI-Quellen im Netz, kodiert sie als H.264
+  (CPU, Intel/AMD per VA-API oder NVIDIA per NVENC) und verteilt sie per WebRTC mit geringer Verzögerung.
+  Die NDI-Laufzeit lädt das Addon nach Zustimmung zur NDI-Lizenz selbst herunter.
+icon: video
+url: https://ndi.video/
+arch: [amd64, arm64]
+
+options:
+  acceptLicense:
+    type: bool
+    label: NDI-Lizenzbedingungen akzeptiert
+    help: >-
+      Die NDI-Laufzeit ist proprietär (NDI SDK License Agreement, ndi.video). Mit dem Häkchen stimmt ihr als
+      Lizenznehmer zu; erst dann wird sie heruntergeladen.
+    default: false
+  encoder:
+    type: select
+    label: Video-Encoder
+    help: VA-API reicht /dev/dri in den Container durch; NVENC braucht NVIDIA-Treiber und NVIDIA Container Toolkit auf dem Host.
+    default: cpu
+    choices:
+      - { value: cpu, label: CPU (x264) – überall, ca. 1–2 Kerne je Strom }
+      - { value: vaapi, label: Intel/AMD-Grafik (VA-API) }
+      - { value: nvenc, label: NVIDIA-Grafik (NVENC) }
+  resolution:
+    type: select
+    label: Auflösung
+    default: "720"
+    choices:
+      - { value: "720", label: 720p (1280×720) }
+      - { value: "1080", label: 1080p (1920×1080) }
+  bitrate:
+    type: int
+    label: Bitrate (kbit/s je Strom)
+    help: Richtwert 2500–4000 für 720p, 5000–8000 für 1080p.
+    default: 4000
+    min: 500
+    max: 20000
+  fps:
+    type: select
+    label: Bildrate
+    default: "25"
+    choices: ["25", "30", "50"]
+  audio:
+    type: bool
+    label: Ton übertragen
+    default: true
+  sources:
+    type: string
+    label: Nur diese Quellen
+    help: Teile von NDI-Namen, kommagetrennt (z. B. „KAMERA, DROHNE“). Leer = alle gefundenen Quellen.
+    default: ""
+  maxStreams:
+    type: int
+    label: Höchstzahl gleichzeitiger Ströme
+    default: 4
+    min: 1
+    max: 16
+  transport:
+    type: select
+    label: Übertragung
+    help: >-
+      TCP funktioniert zuverlässig auch hinter NAT, Firewalls oder in Docker Desktop. Reliable UDP ist der NDI-Standard,
+      braucht aber eingehendes UDP am Docker-Host – sonst „Keine Bilddaten von der Quelle“.
+    default: tcp
+    choices:
+      - { value: tcp, label: TCP (empfohlen) }
+      - { value: udp, label: Reliable UDP (NDI-Standard) }
+  discovery:
+    type: string
+    label: NDI Discovery Server
+    help: Optional, IP[:Port] – statt automatischer Suche per mDNS (z. B. in gerouteten Netzen).
+    default: ""
+  webrtcPort:
+    type: int
+    label: Port WebRTC (HTTP)
+    default: 8889
+    min: 1024
+    max: 65535
+  mediaPort:
+    type: int
+    label: Port WebRTC-Medien (UDP/TCP)
+    default: 8189
+    min: 1024
+    max: 65535
+  statusPort:
+    type: int
+    label: Port Status
+    default: 8890
+    min: 1024
+    max: 65535
+  rtspPort:
+    type: int
+    label: Port RTSP (nur intern)
+    default: 8554
+    min: 1024
+    max: 65535
+
+files:
+  volume: data
+  target: /addon
+  paths:
+    - scripts/ndi-runtime.sh
+    - mediamtx.yml
+
+builds:
+  gateway:
+    context: docker
+    files: [Dockerfile, gateway.py]
+    label: einmalig, ca. 3–10 Minuten
+
+containers:
+  - name: mediamtx
+    image: bluenviron/mediamtx:1.21.2
+    command: ["/data/addon/mediamtx.yml"]
+    network: host
+    volumes:
+      - { name: data, target: /data, readOnly: true }
+    env:
+      MTX_RTSPADDRESS: "127.0.0.1:{{options.rtspPort}}"
+      MTX_WEBRTCADDRESS: ":{{options.webrtcPort}}"
+      MTX_WEBRTCLOCALUDPADDRESS: ":{{options.mediaPort}}"
+      MTX_WEBRTCLOCALTCPADDRESS: ":{{options.mediaPort}}"
+      MTX_WEBRTCADDITIONALHOSTS: "{{host.address}}"
+  - name: gateway
+    image: build:gateway
+    network: host
+    waitForJob: runtime
+    volumes:
+      - { name: data, target: /data }
+    env:
+      ENCODER: "{{options.encoder}}"
+      RESOLUTION: "{{options.resolution}}"
+      BITRATE: "{{options.bitrate}}"
+      FPS: "{{options.fps}}"
+      AUDIO: "{{options.audio}}"
+      SOURCES: "{{options.sources}}"
+      MAX_STREAMS: "{{options.maxStreams}}"
+      DISCOVERY: "{{options.discovery}}"
+      TRANSPORT: "{{options.transport}}"
+      RTSP_PORT: "{{options.rtspPort}}"
+      STATUS_PORT: "{{options.statusPort}}"
+    devices:
+      - { path: /dev/dri, when: { option: encoder, equals: vaapi } }
+    gpus:
+      when: { option: encoder, equals: nvenc }
+
+jobs:
+  runtime:
+    label: NDI-Laufzeit laden
+    description: Lädt die NDI-Laufzeit (libndi) von NDI – nur nach Zustimmung zur NDI-Lizenz in den Einstellungen.
+    runOnInstall: true
+    restartAfter: true
+    image: alpine:3.20
+    command: ["sh", "/data/addon/scripts/ndi-runtime.sh"]
+    env:
+      ACCEPT_LICENSE: "{{options.acceptLicense}}"
+    volumes:
+      - { name: data, target: /data }
+
+provides:
+  videoSources:
+    - id: ndi
+      name: NDI
+      status: "http://{{host.address}}:{{options.statusPort}}/status.json"
+      webrtc: "http://{{host.address}}:{{options.webrtcPort}}"
