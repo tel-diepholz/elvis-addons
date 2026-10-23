@@ -6,6 +6,7 @@ InformationsSystem. ELVIS installiert sie als Docker-Container auf den Servern i
 | Addon | Zweck |
 |---|---|
 | [`kartenserver`](kartenserver/addon.yaml) | Eigene Kartenkacheln aus OpenStreetMap (Planetiler + tileserver-gl), offline nutzbar, mit Standard-, Dunkel- und Druckstil |
+| [`ortssuche`](ortssuche/addon.yaml) | Ortssuche und Ortsumrisse für die Karte ohne Internet: Nominatim mit OSM-Daten von Geofabrik (Deutschland ca. 100 GB, Import 8–12 h), aktuell über Replikation |
 | [`ndi-gateway`](ndi-gateway/addon.yaml) | NDI-Quellen im Browser: GStreamer → H.264 → MediaMTX → WebRTC, Encoder CPU/VA-API/NVENC |
 | [`hello`](hello/addon.yaml) | Kleines Beispiel zum Ausprobieren der Addon-Verwaltung |
 
@@ -35,4 +36,5 @@ dann auf dem Host neu. Das Manifest-Format ist im README von ELVIS beschrieben.
 ## Lizenz
 
 [MIT](LICENSE). Addons laden Software Dritter erst bei der Installation und unter deren eigenen Lizenzen, z. B. die
-NDI-Laufzeit (NDI SDK License Agreement, nur nach ausdrücklicher Zustimmung).
+NDI-Laufzeit (NDI SDK License Agreement, nur nach ausdrücklicher Zustimmung). Die Daten der Ortssuche stammen aus
+OpenStreetMap (ODbL).

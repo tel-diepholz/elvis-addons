@@ -4,3 +4,4 @@ addons:
   - hello
   - kartenserver
   - ndi-gateway
+  - ortssuche
