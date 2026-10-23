@@ -1,5 +1,5 @@
-name: ELVIS (eingebaut)
-maintainer: ELVIS
+name: ELVIS-Addons
+maintainer: tel-diepholz
 addons:
   - hello
   - kartenserver
