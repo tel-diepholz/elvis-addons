@@ -21,6 +21,8 @@ echo "deb [signed-by=/etc/apt/keyrings/packages.mozilla.org.asc] https://package
 printf 'Package: *\nPin: origin packages.mozilla.org\nPin-Priority: 1000\n' >/etc/apt/preferences.d/mozilla
 apt-get update
 apt_install firefox firefox-l10n-de
+# Firmware-Updates nur auf Auftrag aus ELVIS (fwupd-refresh bleibt maskiert)
+apt_install fwupd
 
 # --- Windows-11-Optik: Fluent (vinceliuice, GPL-3.0) für Plasma, GTK, Symbole und Kvantum ---
 FLUENT=/tmp/fluent
@@ -70,6 +72,9 @@ install -D -m 0755 "$S/elvis-clientd.py" /usr/lib/elvis/elvis-clientd
 install -D -m 0755 "$S/pam-check.py" /usr/lib/elvis/pam-check
 install -D -m 0644 "$S/elvis-clientd.service" /etc/systemd/system/elvis-clientd.service
 install -m 0644 "$S/pam.d-sddm" /etc/pam.d/sddm
+# Bildschirmsperre (Standby, Sperren) mit der PIN aufheben
+install -D -m 0755 "$S/pam-unlock.py" /usr/lib/elvis/pam-unlock
+install -m 0644 "$S/pam.d-kde" /etc/pam.d/kde
 install -D -m 0755 "$S/elvis-hinweis.py" /usr/lib/elvis/elvis-hinweis
 install -D -m 0644 "$S/elvis-hinweis.desktop" /etc/xdg/autostart/elvis-hinweis.desktop
 # NetworkManager verwaltet auch Kabelanschlüsse (sonst bleiben sie ohne Adresse, Ubuntu überlässt sie netplan)

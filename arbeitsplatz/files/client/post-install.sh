@@ -23,5 +23,7 @@ fetch elvis-clientd.py /usr/lib/elvis/elvis-clientd 0755
 fetch pam-check.py /usr/lib/elvis/pam-check 0755
 fetch elvis-hinweis.py /usr/lib/elvis/elvis-hinweis 0755
 fetch pam.d-sddm /etc/pam.d/sddm 0644
+fetch pam-unlock.py /usr/lib/elvis/pam-unlock 0755
+fetch pam.d-kde /etc/pam.d/kde 0644
 fetch sddm-theme/Main.qml /usr/share/sddm/themes/elvis/Main.qml 0644
 exit 0

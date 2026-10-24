@@ -321,5 +321,35 @@ Rectangle {
         }
     }
 
+    // --- Update läuft: Anmeldung gesperrt ---
+
+    Rectangle {
+        anchors.fill: parent
+        visible: !!(info && info.updating)
+        color: "#e60b2a52"
+        MouseArea { anchors.fill: parent; hoverEnabled: true } // Eingaben darunter abfangen
+        Column {
+            anchors.centerIn: parent
+            spacing: 18 * u
+            width: Math.min(parent.width - 80 * u, 760 * u)
+            BusyIndicator { anchors.horizontalCenter: parent.horizontalCenter; running: parent.visible; width: 72 * u; height: width }
+            Text {
+                width: parent.width
+                horizontalAlignment: Text.AlignHCenter
+                color: "white"
+                font.pixelSize: 34 * u
+                text: "Update läuft"
+            }
+            Text {
+                width: parent.width
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
+                color: "#e5ffffff"
+                font.pixelSize: 20 * u
+                text: (info && info.updating ? info.updating.message : "") + "\n\nBitte das Notebook nicht ausschalten und am Netzteil lassen. Danach ist die Anmeldung wieder möglich; falls nötig, startet das Notebook selbst neu."
+            }
+        }
+    }
+
     Component.onCompleted: search.forceActiveFocus()
 }

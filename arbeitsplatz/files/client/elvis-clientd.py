@@ -19,12 +19,13 @@ import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.0.1"
+VERSION = "1.1.0"
 CONFIG = "/etc/elvis/client.json"
 STATE_DIR = "/var/lib/elvis-client"
 RUN_DIR = "/run/elvis-client"
 CACHE = f"{STATE_DIR}/cache.json"
 VERIFIERS = f"{STATE_DIR}/verifiers.json"
+UPDATE_FILE = f"{STATE_DIR}/update.json"  # zuletzt bearbeiteter Update-Auftrag
 LISTEN = ("127.0.0.1", 7171)
 SYNC_S = 30
 HEARTBEAT_S = 60
@@ -145,6 +146,137 @@ def sync():
         cache.update(users=state["users"], incident=state["incident"], workstation=state["workstation"], lastSync=state["serverTime"], revoked=False)
         save(CACHE, cache)
         save(VERIFIERS, verifiers)
+    check_update(state.get("update"))
+
+
+# --- Updates (von ELVIS angestoßen; nur wenn niemand angemeldet ist) ---
+
+updating = None  # laufendes Update: {"id", "message"} – sperrt die Anmeldung
+UPDATE_LOG_MAX = 20_000
+APT_SOURCES = "/etc/apt/sources.disabled"  # Paketquellen, die nur während eines Updates gelten
+
+
+def report_update(order_id, state, message, log_text=""):
+    try:
+        api("POST", "/api/clients/update", {"id": order_id, "state": state, "message": message[:300], "log": log_text[-UPDATE_LOG_MAX:]})
+        return True
+    except (Offline, ApiError) as e:
+        log("Update-Rückmeldung fehlgeschlagen:", e)
+        return False
+
+
+def check_update(order):
+    """Auftrag aus dem Abgleich: abgeschlossene erneut melden, neue starten, sobald niemand angemeldet ist"""
+    global updating
+    if not order:
+        return
+    with lock:
+        if updating:
+            return
+        last = load(UPDATE_FILE, {})
+        if last.get("id") == order["id"]:
+            if last.get("state") == "running":
+                # Dienst oder Gerät während des Updates neu gestartet
+                last.update(state="failed", message="Unterbrochen (Neustart während des Updates)")
+                save(UPDATE_FILE, last)
+            report_update(last["id"], last["state"], last.get("message", ""), last.get("log", ""))
+            return
+        # vor der Prüfung sperren, damit sich niemand dazwischen anmeldet
+        updating = {"id": order["id"], "message": "Update wird vorbereitet …"}
+    if active_user():
+        with lock:
+            updating = None
+        return
+    threading.Thread(target=run_update, args=(order,), daemon=True).start()
+
+
+class UpdateRun:
+    """Befehle ausführen, Ausgabe sammeln und den Stand regelmäßig an ELVIS melden"""
+
+    def __init__(self, order):
+        self.order = order
+        self.out = ""
+        self.last_report = 0.0
+
+    def status(self, message):
+        global updating
+        with lock:
+            updating = {"id": self.order["id"], "message": message}
+        self.out += f"\n== {message}\n"
+        self.flush(force=True)
+
+    def flush(self, force=False):
+        if force or time.time() - self.last_report > 15:
+            self.last_report = time.time()
+            report_update(self.order["id"], "running", updating["message"] if updating else "", self.out)
+
+    def run(self, cmd, env=None, ok=(0,)):
+        self.out += "$ " + " ".join(cmd) + "\n"
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env={**os.environ, **(env or {})})
+        for line in p.stdout:
+            self.out = (self.out + line)[-UPDATE_LOG_MAX:]
+            self.flush()
+        code = p.wait()
+        if code not in ok:
+            raise RuntimeError(f"{cmd[0]} {cmd[1] if len(cmd) > 1 else ''} beendet mit Code {code}")
+        return code
+
+
+def run_update(order):
+    global updating
+    proxy = order["aptProxy"]
+    run = UpdateRun(order)
+    save(UPDATE_FILE, {"id": order["id"], "state": "running"})
+    summary = []
+    reboot = False
+    try:
+        if order.get("apt") or (order.get("firmware") and not os.path.exists("/usr/bin/fwupdmgr")):
+            apt = [
+                "apt-get", "-q",
+                "-o", f"Acquire::http::Proxy={proxy}", "-o", f"Acquire::https::Proxy={proxy}",
+                "-o", "Dir::Etc::SourceList=/dev/null", "-o", f"Dir::Etc::SourceParts={APT_SOURCES}",
+                "-o", "APT::Install-Recommends=false",
+                "-o", "Dpkg::Options::=--force-confdef", "-o", "Dpkg::Options::=--force-confold",
+            ]  # fmt: skip
+            env = {"DEBIAN_FRONTEND": "noninteractive"}
+            run.status("Paketlisten laden")
+            run.run(apt + ["update"], env)
+            if order.get("apt"):
+                run.status("Pakete aktualisieren")
+                before = len(run.out)
+                run.run(apt + ["-y", "dist-upgrade"], env)
+                m = re.search(r"(\d+) (?:upgraded|aktualisiert)", run.out[before:])
+                summary.append(f"{m.group(1) if m else '?'} Pakete aktualisiert")
+                run.run(apt + ["-y", "autoremove", "--purge"], env)
+            if order.get("firmware") and not os.path.exists("/usr/bin/fwupdmgr"):
+                run.status("fwupd installieren")
+                run.run(apt + ["-y", "install", "fwupd"], env)
+            run.run(["apt-get", "clean"])
+            # Paketlisten wieder verwerfen: ohne Auftrag sucht das System weiterhin nichts
+            subprocess.run(["sh", "-c", "rm -rf /var/lib/apt/lists/*"])
+            reboot = os.path.exists("/run/reboot-required")
+        if order.get("firmware"):
+            env = {"http_proxy": proxy, "https_proxy": proxy, "HTTP_PROXY": proxy, "HTTPS_PROXY": proxy}
+            run.status("Firmware-Liste laden (LVFS)")
+            run.run(["fwupdmgr", "refresh", "--force", "-y"], env, ok=(0, 2))
+            run.status("Firmware aktualisieren")
+            # 2 = nichts zu tun
+            code = run.run(["fwupdmgr", "update", "-y", "--no-reboot-check"], env, ok=(0, 2))
+            summary.append("Firmware aktualisiert" if code == 0 else "Firmware aktuell")
+            reboot = reboot or code == 0
+        message = ", ".join(summary) + (" – Neustart" if reboot else "")
+        state = "done"
+    except Exception as e:  # noqa: BLE001 – jeder Fehler beendet das Update mit Meldung
+        message = str(e)[:300]
+        state = "failed"
+        reboot = False
+    log(f"Update {order['id']}: {state} – {message}")
+    save(UPDATE_FILE, {"id": order["id"], "state": state, "message": message, "log": run.out[-UPDATE_LOG_MAX:]})
+    report_update(order["id"], state, message, run.out)
+    with lock:
+        updating = None if not reboot else {"id": order["id"], "message": "Neustart …"}
+    if reboot:
+        subprocess.run(["systemctl", "reboot"])
 
 
 def describe(e):
@@ -237,7 +369,9 @@ def issue_otp(name, user, incident, offline):
     return otp
 
 
-def login(user_id, pin):
+def verify_pin(user_id, pin, purpose="login"):
+    """PIN prüfen: online über ELVIS (merkt sich den Offline-Verifier), sonst gegen den Verifier.
+    Liefert (Benutzer, Einsatz, offline)."""
     with lock:
         user = next((u for u in cache["users"] if u["id"] == user_id), None)
         if cache.get("revoked"):
@@ -250,7 +384,7 @@ def login(user_id, pin):
 
     offline = False
     try:
-        result = api("POST", "/api/clients/login", {"userId": user_id, "pin": pin})
+        result = api("POST", "/api/clients/login", {"userId": user_id, "pin": pin, "purpose": purpose})
         incident = result["incident"]
         salt = secrets.token_hex(16)
         with lock:
@@ -277,7 +411,14 @@ def login(user_id, pin):
             left = limiter.failure(user_id)
             raise ApiError(401, f"PIN falsch – noch {left} Versuch{'e' if left != 1 else ''}" if left else "PIN falsch – Anmeldung vorübergehend gesperrt")
         limiter.success(user_id)
+    return user, incident, offline
 
+
+def login(user_id, pin):
+    with lock:
+        if updating:
+            raise ApiError(503, "Update läuft – Anmeldung danach wieder möglich")
+    user, incident, offline = verify_pin(user_id, pin)
     name = account_name(incident, user_id)
     ensure_account(name, user, incident)
     otp = issue_otp(name, user, incident, offline)
@@ -285,11 +426,22 @@ def login(user_id, pin):
     return {"account": name, "otp": otp, "incident": incident, "offline": offline}
 
 
+def unlock(account, pin):
+    """Bildschirmsperre der laufenden Sitzung aufheben: PIN des ELVIS-Benutzers, dem das Profilkonto gehört"""
+    m = ACCOUNT.match(account or "")
+    if not m:
+        raise ApiError(400, "Kein ELVIS-Profilkonto")
+    user, _, offline = verify_pin(int(m.group(2)), pin, purpose="unlock")
+    log(f"Entsperrt: {user['firstName']} {user['lastName']} ({account}){' offline' if offline else ''}")
+    return {"ok": True}
+
+
 def public_state():
     with lock:
         return {
             "online": online,
             "revoked": bool(cache.get("revoked")),
+            "updating": updating,
             "configured": bool(ELVIS and TOKEN),
             "error": None if online else (last_error if ELVIS and TOKEN else f"{CONFIG} fehlt – Arbeitsplatz neu installieren"),
             "lastSync": cache.get("lastSync"),
@@ -316,9 +468,9 @@ def active_user():
         name = next((p for p in parts if ACCOUNT.match(p)), None)
         if name:
             try:
-                return pwd.getpwnam(name).pw_gecos.split(" (")[0]
+                return pwd.getpwnam(name).pw_gecos.split(" (")[0] or name
             except KeyError:
-                pass
+                return name
     return None
 
 
@@ -380,11 +532,13 @@ class Handler(BaseHTTPRequestHandler):
         self.send(404, {"error": "Nicht gefunden"})
 
     def do_POST(self):
-        if self.path != "/login":
+        if self.path not in ("/login", "/unlock"):
             return self.send(404, {"error": "Nicht gefunden"})
         try:
             length = min(int(self.headers.get("Content-Length", 0)), 4096)
             body = json.loads(self.rfile.read(length) or b"{}")
+            if self.path == "/unlock":
+                return self.send(200, unlock(str(body.get("account", "")), str(body.get("pin", ""))))
             self.send(200, login(int(body.get("userId", 0)), str(body.get("pin", ""))))
         except ApiError as e:
             self.send(e.status, {"error": e.message})

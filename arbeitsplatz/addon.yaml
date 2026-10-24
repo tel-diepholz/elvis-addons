@@ -2,7 +2,7 @@
 # sich die Benutzer von ELVIS mit ihrer PIN anmelden. Alles läuft offline aus einem vorab gebauten Abbild.
 id: arbeitsplatz
 name: ELVIS Arbeitsplatz (PXE)
-version: 1.1.0
+version: 1.2.0
 description: >-
   Notebooks per Netzwerkstart (PXE, UEFI mit Secure Boot oder BIOS) als ELVIS-Arbeitsplatz installieren: Ubuntu mit
   KDE Plasma im Windows-11-Stil, Anmeldung mit den Benutzern und PINs aus ELVIS (auch offline für bekannte Benutzer),
@@ -57,6 +57,15 @@ options:
     label: Zeitzone
     default: Europe/Berlin
     pattern: "^[A-Za-z_]+(/[A-Za-z_+-]+){0,2}$"
+  aptCachePort:
+    type: int
+    label: Port des apt-Caches
+    help: >-
+      Für Updates der Arbeitsplätze (System → Arbeitsplätze → Aktualisieren). Der Docker-Host braucht dafür Internet,
+      die Notebooks nicht.
+    default: 3142
+    min: 1024
+    max: 65535
   extraPackages:
     type: string
     label: Zusätzliche Pakete
@@ -81,6 +90,8 @@ files:
     - client/elvis-clientd.service
     - client/pam-check.py
     - client/pam.d-sddm
+    - client/pam-unlock.py
+    - client/pam.d-kde
     - client/sddm.conf
     - client/99elvis-no-updates
     - client/elvis-hinweis.py
@@ -108,6 +119,10 @@ builds:
     context: docker/builder
     files: [Dockerfile]
     label: einmalig, ca. 1–2 Minuten
+  aptcache:
+    context: docker/aptcache
+    files: [Dockerfile, acng.conf, entrypoint.sh]
+    label: einmalig, unter 1 Minute
   pxe:
     context: docker/pxe
     files: [Dockerfile, entrypoint.sh, grub.cfg.in, pxelinux.cfg.in, iso-grub.cfg.in, isolinux.cfg.in, nginx.conf]
@@ -197,9 +212,19 @@ containers:
     volumes:
       - { name: data, target: /data, readOnly: true }
 
+  # apt-Cache für Updates der Arbeitsplätze (die Notebooks selbst haben keine Paketquellen)
+  - name: aptcache
+    image: build:aptcache
+    volumes:
+      - { name: aptcache, target: /var/cache/apt-cacher-ng }
+    ports:
+      - container: 3142
+        host: "{{options.aptCachePort}}"
+
 provides:
   workstations:
     - id: ap
       name: Arbeitsplätze
       token: "{{addon.secret}}"
       installerIso: "http://{{host.address}}:{{options.httpPort}}/iso/elvis-installer.iso"
+      aptProxy: "http://{{host.address}}:{{options.aptCachePort}}"
