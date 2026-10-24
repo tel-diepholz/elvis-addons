@@ -9,7 +9,13 @@ menuentry "Von Festplatte starten" {
   exit 1
 }
 menuentry "ELVIS Arbeitsplatz installieren (Abbild @VERSION@)" {
-  echo "Installer wird geladen …"
-  linux /installer/vmlinuz boot=live fetch=@BASE@/images/installer/filesystem.squashfs ip=dhcp elvis.config=@BASE@/config/installer.env quiet splash=off
-  initrd /installer/initrd.img
+  echo "Installer wird per HTTP geladen (@HOSTPORT@) …"
+  if linux (http,@HOSTPORT@)/tftp/installer/vmlinuz boot=live fetch=@BASE@/images/installer/filesystem.squashfs ip=dhcp elvis.config=@BASE@/config/installer.env quiet splash=off; then
+    initrd (http,@HOSTPORT@)/tftp/installer/initrd.img
+  else
+    # Rückfall: TFTP (langsam, bei großer initrd mehrere Minuten ohne Anzeige)
+    echo "HTTP nicht möglich – lade per TFTP, das kann einige Minuten dauern …"
+    linux /installer/vmlinuz boot=live fetch=@BASE@/images/installer/filesystem.squashfs ip=dhcp elvis.config=@BASE@/config/installer.env quiet splash=off
+    initrd /installer/initrd.img
+  fi
 }

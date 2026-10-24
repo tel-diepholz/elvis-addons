@@ -19,7 +19,9 @@ echo "Netzwerkstart auf $IFACE ($CIDR), Netz $NET, HTTP $BASE"
 # TFTP-Verzeichnis: Startdateien aus dem Volume, Menüs mit der eigenen Adresse
 rm -rf /srv/tftp && mkdir -p /srv/tftp/grub /srv/tftp/pxelinux.cfg
 cp -a /data/tftp/. /srv/tftp/
-render() { sed -e "s|@BASE@|$BASE|g" -e "s|@VERSION@|$(cat /data/images/VERSION 2>/dev/null || echo unbekannt)|g" "$1"; }
+# Abbilder älterer Bauläufe: Kernel/initrd waren nur für root lesbar (dnsmasq und nginx laufen ohne root)
+chmod -R a+rX /srv/tftp
+render() { sed -e "s|@BASE@|$BASE|g" -e "s|@HOSTPORT@|$ADDR:$PORT|g" -e "s|@VERSION@|$(cat /data/images/VERSION 2>/dev/null || echo unbekannt)|g" "$1"; }
 render /usr/share/elvis/grub.cfg.in > /srv/tftp/grub/grub.cfg
 render /usr/share/elvis/pxelinux.cfg.in > /srv/tftp/pxelinux.cfg/default
 

@@ -36,8 +36,10 @@ mmdebstrap --mode=root --variant=minbase --format=directory \
   "deb $MIRROR $REL-security main restricted universe multiverse"
 
 echo "ELVIS_PROGRESS 80 Kernel und squashfs"
-cp -L "$WORK/boot/vmlinuz" "$TFTP/vmlinuz.new" && mv "$TFTP/vmlinuz.new" "$TFTP/vmlinuz"
-cp -L "$WORK/boot/initrd.img" "$TFTP/initrd.img.new" && mv "$TFTP/initrd.img.new" "$TFTP/initrd.img"
+# Ubuntu legt Kernel und initrd nur für root lesbar ab (0600) – TFTP und nginx laufen ohne root
+install -m 0644 "$WORK/boot/vmlinuz" "$TFTP/vmlinuz.new" && mv "$TFTP/vmlinuz.new" "$TFTP/vmlinuz"
+install -m 0644 "$WORK/boot/initrd.img" "$TFTP/initrd.img.new" && mv "$TFTP/initrd.img.new" "$TFTP/initrd.img"
+echo "Kernel $(du -h "$TFTP/vmlinuz" | cut -f1), initrd $(du -h "$TFTP/initrd.img" | cut -f1)"
 rm -f "$OUT/filesystem.squashfs.new"
 mksquashfs "$WORK" "$OUT/filesystem.squashfs.new" -comp zstd -e boot -noappend -quiet
 mv "$OUT/filesystem.squashfs.new" "$OUT/filesystem.squashfs"
