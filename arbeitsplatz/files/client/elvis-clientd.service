@@ -1,0 +1,15 @@
+[Unit]
+Description=ELVIS Arbeitsplatz-Dienst (Benutzer, Einsatz, PIN-Prüfung)
+After=network.target
+Before=sddm.service
+
+[Service]
+ExecStart=/usr/lib/elvis/elvis-clientd
+Restart=always
+RestartSec=2
+# Profilkonten anlegen braucht root; erreichbar nur über 127.0.0.1
+PrivateTmp=yes
+ProtectHome=no
+
+[Install]
+WantedBy=multi-user.target

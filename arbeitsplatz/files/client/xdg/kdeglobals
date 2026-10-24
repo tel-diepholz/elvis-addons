@@ -1,0 +1,16 @@
+[General]
+ColorScheme=@COLORS@
+font=Noto Sans,10,-1,5,50,0,0,0,0,0
+fixed=Noto Sans Mono,10,-1,5,50,0,0,0,0,0
+smallestReadableFont=Noto Sans,8,-1,5,50,0,0,0,0,0
+toolBarFont=Noto Sans,10,-1,5,50,0,0,0,0,0
+menuFont=Noto Sans,10,-1,5,50,0,0,0,0,0
+
+[Icons]
+Theme=@ICONS@
+
+[KDE]
+LookAndFeelPackage=de.elvis.desktop
+widgetStyle=kvantum
+SingleClick=false
+ShowDeleteCommand=false

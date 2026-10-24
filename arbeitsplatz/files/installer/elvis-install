@@ -1,0 +1,274 @@
+#!/bin/bash
+# ELVIS Arbeitsplatz – Installer (läuft im Live-System auf tty1).
+# Fragt Zielplatte und Ziel des Bootloaders ab, bestätigt das Löschen, entpackt das Abbild, richtet GRUB ein und
+# registriert das Notebook bei ELVIS. Bis zur Bestätigung wird nichts verändert.
+set -u
+LOG=/tmp/elvis-install.log
+TARGET=/mnt/target
+TITLE="ELVIS Arbeitsplatz – Installation"
+ESP_GUID=c12a7328-f81f-11d2-ba4b-00a0c93ec93b
+# fd 3 = Terminal (whiptail zeichnet auf stdout/stderr); Ausgaben der Werkzeuge gehen einzeln ins Protokoll
+exec 3>&1
+log() { printf '%s %s\n' "$(date +%T)" "$*" >>"$LOG"; }
+
+# --- Oberfläche ---
+
+msg() { whiptail --title "$TITLE" --msgbox "$1" "${2:-14}" 74 >&3; }
+yesno() { whiptail --title "$TITLE" --yes-button "${3:-Ja}" --no-button "${4:-Nein}" --yesno "$1" "${2:-12}" 74 >&3; }
+# Auswahl: gibt das Kennzeichen aus; Abbrechen → Rückgabewert 1
+menu() {
+  local text=$1 height=$2; shift 2
+  whiptail --title "$TITLE" --ok-button "Auswählen" --cancel-button "Zurück" --notags --menu "$text" "$height" 76 $(( height - 8 )) "$@" 3>&1 1>&2 2>&3
+}
+input() { whiptail --title "$TITLE" --ok-button "Weiter" --cancel-button "Zurück" --inputbox "$1" 10 74 "$2" 3>&1 1>&2 2>&3; }
+
+fail() {
+  log "FEHLER: $1"
+  whiptail --title "$TITLE – Fehler" --msgbox "$1\n\nDetails stehen in $LOG (Shell: Strg+Alt+F2 nach Abbruch)." 16 74 >&3
+  finish_menu
+}
+
+finish_menu() {
+  while :; do
+    local c
+    c=$(whiptail --title "$TITLE" --nocancel --notags --menu "Wie geht es weiter?" 14 60 4 \
+      reboot "Neu starten" poweroff "Ausschalten" shell "Shell öffnen (Fehlersuche)" retry "Installation neu beginnen" 3>&1 1>&2 2>&3)
+    case "$c" in
+      reboot) umount_target; systemctl reboot; exit 0 ;;
+      poweroff) umount_target; systemctl poweroff; exit 0 ;;
+      shell) clear >&3; echo "Protokoll: $LOG – zurück mit „exit“" >&3; bash -i <&0 >&3 2>&3 ;;
+      retry) umount_target; exec "$0" ;;
+    esac
+  done
+}
+
+umount_target() {
+  for m in sys/firmware/efi/efivars sys proc dev/pts dev run boot/efi ""; do
+    mountpoint -q "$TARGET/$m" 2>/dev/null && umount -l "$TARGET/$m"
+  done
+  return 0
+}
+
+# --- Konfiguration vom Addon (elvis.config=<url> auf der Kernel-Kommandozeile) ---
+
+CONFIG_URL=$(tr ' ' '\n' </proc/cmdline | sed -n 's/^elvis\.config=//p' | head -n1)
+CONF=$(curl -fsS --retry 10 --retry-delay 2 --retry-all-errors "$CONFIG_URL" 2>>"$LOG") || fail "Konfiguration vom Addon nicht erreichbar:\n$CONFIG_URL"
+cfg() { printf '%s\n' "$CONF" | sed -n "s/^$1=//p" | head -n1 | base64 -d 2>/dev/null; }
+ELVIS_URL=$(cfg ELVIS_URL)
+ENROLL_TOKEN=$(cfg ENROLL_TOKEN)
+HOSTNAME_PREFIX=$(cfg HOSTNAME_PREFIX)
+ADMIN_HASH=$(cfg ADMIN_HASH)
+IMAGE_URL=$(cfg IMAGE_URL)
+IMAGE_SIZE=$(cfg IMAGE_SIZE)
+IMAGE_VERSION=$(cfg IMAGE_VERSION)
+[ -n "$ELVIS_URL" ] && [ -n "$IMAGE_URL" ] || fail "Konfiguration unvollständig."
+
+if [ -d /sys/firmware/efi ]; then MODE=uefi; MODE_TEXT="UEFI"; else MODE=bios; MODE_TEXT="BIOS (Legacy)"; fi
+if [ "$MODE" = uefi ] && [ "$(od -An -t u1 -j4 -N1 /sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c 2>/dev/null | tr -d ' ')" = 1 ]; then
+  MODE_TEXT="UEFI mit Secure Boot"
+fi
+
+# Schnittstelle, über die gestartet wurde (Standardroute), und ihre MAC-Adresse
+IFACE=$(ip -4 route show default | awk '{for(i=1;i<NF;i++) if($i=="dev"){print $(i+1); exit}}')
+[ -n "$IFACE" ] || IFACE=$(ls /sys/class/net | grep -E '^(en|eth)' | head -n1)
+MAC=$(cat "/sys/class/net/$IFACE/address" 2>/dev/null || echo "00:00:00:00:00:00")
+HOSTNAME_DEFAULT="${HOSTNAME_PREFIX:-elvis-ap}-$(printf '%s' "$MAC" | tr -d ':' | tail -c 4)"
+log "Start: $MODE_TEXT, $IFACE $MAC, Abbild $IMAGE_VERSION, ELVIS $ELVIS_URL"
+
+# --- Platten ---
+
+# Alle beschreibbaren Platten (ohne Loop, RAM, optische Laufwerke)
+disks() { lsblk -dpn -o NAME,TYPE,RO | awk '$2=="disk" && $3=="0" {print $1}' | grep -v -E '/dev/(loop|ram|zram|sr)'; }
+human() { numfmt --to=si --suffix=B --format='%.1f' "$1"; }
+disk_line() {
+  local d=$1 size model tran rm kind
+  size=$(lsblk -dbn -o SIZE "$d"); model=$(lsblk -dn -o MODEL "$d" | sed 's/ *$//'); tran=$(lsblk -dn -o TRAN "$d" | tr -d ' ')
+  rm=$(lsblk -dn -o RM "$d" | tr -d ' ')
+  case "$tran" in nvme) kind=NVMe ;; sata|ata) kind=SATA ;; usb) kind="USB" ;; *) kind=${tran:-?} ;; esac
+  [ "$tran" = usb ] || [ "$rm" = 1 ] && kind="$kind, WECHSELDATENTRÄGER"
+  printf '%s  %s  %s (%s)' "$d" "$(human "$size")" "${model:-unbekannt}" "$kind"
+}
+disk_parts() {
+  lsblk -pn -o NAME,SIZE,FSTYPE,LABEL,PARTTYPENAME "$1" | tail -n +2 | sed 's/^[^/]*//' | head -n 8
+}
+
+choose_disk() {
+  local args=() d
+  for d in $(disks); do args+=("$d" "$(disk_line "$d")"); done
+  [ ${#args[@]} -gt 0 ] || fail "Keine Festplatte gefunden."
+  menu "Auf welche Festplatte soll installiert werden?\nDie gewählte Platte wird VOLLSTÄNDIG GELÖSCHT." 20 "${args[@]}"
+}
+
+choose_esp() {
+  # Vorhandene EFI-Systempartitionen auf anderen Platten (auf der Zielplatte wird ohnehin alles gelöscht)
+  local args=(new "Neue EFI-Partition auf $DISK anlegen (empfohlen)") p disk
+  while read -r p; do
+    disk="/dev/$(lsblk -no PKNAME "$p" | head -n1)"
+    [ "$disk" = "$DISK" ] && continue
+    args+=("$p" "Vorhandene EFI-Partition $p ($(lsblk -no SIZE "$p" | tr -d ' '), auf $disk) mitbenutzen")
+  done < <(lsblk -pnl -o NAME,PARTTYPE | awk -v g="$ESP_GUID" 'tolower($2)==g {print $1}')
+  menu "Wohin soll der Bootloader (GRUB mit shim für Secure Boot)?\n\nEine vorhandene EFI-Partition (z. B. für Dual-Boot) bleibt erhalten; dort wird nur der Ordner EFI/ubuntu geschrieben." 18 "${args[@]}"
+}
+
+choose_nvram() {
+  menu "Wie soll das UEFI den Bootloader finden?" 14 \
+    nvram "Booteintrag „ubuntu“ im UEFI anlegen (empfohlen)" \
+    removable "Nur Standardpfad EFI/BOOT/BOOTX64.EFI (UEFI vergisst Einträge)" \
+    both "Booteintrag und Standardpfad"
+}
+
+choose_mbr() {
+  local args=("$DISK" "$(disk_line "$DISK") – Zielplatte (empfohlen)") d
+  for d in $(disks); do [ "$d" = "$DISK" ] || args+=("$d" "$(disk_line "$d")"); done
+  menu "In den Startbereich (MBR) welcher Platte soll GRUB?\n\nAuf einer anderen Platte wird deren bisheriger Bootloader ersetzt, die Daten dort bleiben." 18 "${args[@]}"
+}
+
+# --- Abfrage (bis zur Bestätigung ändert sich nichts) ---
+
+whiptail --title "$TITLE" --yes-button "Weiter" --no-button "Abbrechen" --yesno \
+  "Dieses Notebook wird als ELVIS-Arbeitsplatz eingerichtet.\n\nStartmodus:  $MODE_TEXT\nNetzwerk:    $IFACE ($MAC)\nAbbild:      $IMAGE_VERSION\nELVIS:       $ELVIS_URL\n\nDie folgenden Schritte fragen Zielplatte und Bootloader ab. Erst nach der abschließenden Bestätigung wird etwas verändert." 18 74 >&3 || finish_menu
+
+while :; do
+  DISK=$(choose_disk) || finish_menu
+  NEED=$(( ${IMAGE_SIZE:-0} * 13 / 10 + 2000000000 )); [ "$NEED" -gt 20000000000 ] || NEED=20000000000
+  SIZE=$(lsblk -dbn -o SIZE "$DISK")
+  if [ "$SIZE" -lt "$NEED" ]; then msg "$DISK ist zu klein: $(human "$SIZE"), nötig sind mindestens $(human "$NEED")."; continue; fi
+  PARTS=$(disk_parts "$DISK")
+  case "$(disk_line "$DISK")" in *WECHSELDATENTRÄGER*) yesno "$DISK ist ein Wechseldatenträger (USB). Wirklich darauf installieren?" 10 "Ja, darauf" "Andere Platte" || continue ;; esac
+
+  BOOT_ESP=""; NVRAM=""; MBR_DISK=""
+  if [ "$MODE" = uefi ]; then
+    BOOT_ESP=$(choose_esp) || continue
+    NVRAM=$(choose_nvram) || continue
+    if [ "$BOOT_ESP" != new ]; then
+      M=$(mktemp -d); mount -o ro "$BOOT_ESP" "$M" 2>>"$LOG" || { msg "$BOOT_ESP lässt sich nicht einhängen."; rmdir "$M"; continue; }
+      if [ -d "$M/EFI/ubuntu" ] || [ -d "$M/EFI/Ubuntu" ]; then
+        umount "$M"; rmdir "$M"
+        yesno "Auf $BOOT_ESP gibt es schon einen Ubuntu-Bootloader (EFI/ubuntu). Er wird ersetzt – ein dort installiertes Ubuntu startet danach über das GRUB-Menü dieses Arbeitsplatzes.\n\nTrotzdem diese Partition verwenden?" 14 "Ja, ersetzen" "Andere Wahl" || continue
+      else umount "$M"; rmdir "$M"; fi
+    fi
+  else
+    MBR_DISK=$(choose_mbr) || continue
+  fi
+
+  HOST=$(input "Rechnername des Arbeitsplatzes:" "$HOSTNAME_DEFAULT") || continue
+  HOST=$(printf '%s' "$HOST" | tr 'A-Z' 'a-z')
+  if ! printf '%s' "$HOST" | grep -qE '^[a-z0-9][a-z0-9-]{0,62}$'; then msg "Ungültiger Rechnername: nur Buchstaben, Ziffern und Bindestriche."; continue; fi
+
+  if [ "$MODE" = uefi ]; then
+    case "$BOOT_ESP" in new) BL="neue EFI-Partition auf $DISK" ;; *) BL="vorhandene EFI-Partition $BOOT_ESP (bleibt erhalten)" ;; esac
+    case "$NVRAM" in nvram) BL="$BL, UEFI-Booteintrag" ;; removable) BL="$BL, Standardpfad" ;; both) BL="$BL, Booteintrag + Standardpfad" ;; esac
+  else
+    BL="MBR von $MBR_DISK"
+  fi
+  SUMMARY="Zielplatte:   $(disk_line "$DISK")\nBootloader:   $BL\nRechnername:  $HOST\n\nBisheriger Inhalt von $DISK:\n${PARTS:-  (keine Partitionen)}\n\nALLE DATEN AUF $DISK WERDEN GELÖSCHT."
+  CONFIRM=$(whiptail --title "$TITLE – Bestätigung" --ok-button "Installieren" --cancel-button "Zurück" --inputbox "$SUMMARY\n\nZum Fortfahren JA eintippen:" 24 76 "" 3>&1 1>&2 2>&3) || continue
+  [ "$CONFIRM" = JA ] && break
+  msg "Nicht bestätigt – es wurde nichts verändert."
+done
+log "Bestätigt: Platte $DISK, ESP ${BOOT_ESP:--}, NVRAM ${NVRAM:--}, MBR ${MBR_DISK:--}, Host $HOST"
+
+# --- Registrieren (vor dem Löschen: ist ELVIS nicht erreichbar, bleibt die Platte unberührt) ---
+
+while :; do
+  RESP=$(curl -fsS --max-time 20 -H "Authorization: Bearer $ENROLL_TOKEN" -H 'Content-Type: application/json' \
+    -d "{\"hostname\":\"$HOST\",\"mac\":\"$MAC\"}" "$ELVIS_URL/api/clients/enroll" 2>>"$LOG") && break
+  yesno "Registrierung bei ELVIS fehlgeschlagen ($ELVIS_URL).\nLäuft ELVIS, und ist das Addon „ELVIS Arbeitsplatz“ gestartet?\n\nEs wurde noch nichts verändert." 12 "Erneut versuchen" "Abbrechen" || finish_menu
+done
+DEVICE_TOKEN=$(printf '%s' "$RESP" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
+WS_ID=$(printf '%s' "$RESP" | sed -n 's/.*"id":"\(ws-[^"]*\)".*/\1/p')
+[ -n "$DEVICE_TOKEN" ] || fail "Unerwartete Antwort von ELVIS bei der Registrierung."
+
+# --- Installation ---
+
+part() { case "$1" in *[0-9]) echo "${1}p$2" ;; *) echo "$1$2" ;; esac; }
+gauge() { echo "XXX"; echo "$1"; echo "$2"; echo "XXX"; }
+
+run_install() {
+  set -e
+  gauge 2 "Platte $DISK wird partitioniert …"
+  umount_target
+  swapoff -a || true
+  wipefs -a "$DISK" >>"$LOG" 2>&1
+  sgdisk --zap-all "$DISK" >>"$LOG" 2>&1
+  if [ "$MODE" = uefi ] && [ "$BOOT_ESP" = new ]; then
+    sgdisk -n1:0:+512M -t1:ef00 -c1:EFI -n2:0:0 -t2:8304 -c2:elvis "$DISK" >>"$LOG" 2>&1
+    ESP=$(part "$DISK" 1); ROOT=$(part "$DISK" 2)
+  else
+    # BIOS: bios_grub-Partition für GRUB auf GPT (schadet bei UEFI mit fremder ESP nicht)
+    sgdisk -n1:0:+1M -t1:ef02 -c1:bios -n2:0:0 -t2:8304 -c2:elvis "$DISK" >>"$LOG" 2>&1
+    ESP=${BOOT_ESP#new}; ROOT=$(part "$DISK" 2)
+  fi
+  partprobe "$DISK" >>"$LOG" 2>&1 || true
+  udevadm settle
+  gauge 5 "Dateisysteme werden angelegt …"
+  [ "$MODE" = uefi ] && [ "$BOOT_ESP" = new ] && mkfs.vfat -F32 -n EFI "$ESP" >>"$LOG" 2>&1
+  mkfs.ext4 -F -q -L elvis "$ROOT" >>"$LOG" 2>&1
+  mkdir -p "$TARGET"
+  mount "$ROOT" "$TARGET"
+  if [ "$MODE" = uefi ]; then mkdir -p "$TARGET/boot/efi"; mount "$ESP" "$TARGET/boot/efi"; fi
+
+  gauge 8 "Abbild wird geladen und entpackt …"
+  local base used pct
+  base=$(df -B1 --output=used "$TARGET" | tail -n1)
+  ( curl -fsS --retry 5 "$IMAGE_URL" | zstd -dq | tar --numeric-owner --xattrs --xattrs-include='*' --acls -xpf - -C "$TARGET" ) >>"$LOG" 2>&1 &
+  local pid=$!
+  while kill -0 $pid 2>/dev/null; do
+    used=$(( $(df -B1 --output=used "$TARGET" | tail -n1) - base ))
+    pct=$(( ${IMAGE_SIZE:-0} > 0 ? 8 + used * 77 / IMAGE_SIZE : 40 )); [ $pct -gt 85 ] && pct=85
+    gauge $pct "Abbild wird entpackt … $(human "$used")"
+    sleep 2
+  done
+  wait $pid || { echo "Entpacken fehlgeschlagen" >>"$LOG"; return 1; }
+
+  gauge 86 "System wird eingerichtet …"
+  local root_uuid esp_uuid
+  root_uuid=$(blkid -s UUID -o value "$ROOT")
+  {
+    echo "# ELVIS Arbeitsplatz"
+    echo "UUID=$root_uuid / ext4 errors=remount-ro 0 1"
+    if [ "$MODE" = uefi ]; then esp_uuid=$(blkid -s UUID -o value "$ESP"); echo "UUID=$esp_uuid /boot/efi vfat umask=0077 0 1"; fi
+  } >"$TARGET/etc/fstab"
+  echo "$HOST" >"$TARGET/etc/hostname"
+  printf '127.0.0.1 localhost\n127.0.1.1 %s\n::1 localhost ip6-localhost ip6-loopback\n' "$HOST" >"$TARGET/etc/hosts"
+  : >"$TARGET/etc/machine-id"
+  rm -f "$TARGET/var/lib/dbus/machine-id"
+  install -d -m 0700 "$TARGET/etc/elvis"
+  printf '{"elvisUrl": "%s", "token": "%s", "workstationId": "%s"}\n' "$ELVIS_URL" "$DEVICE_TOKEN" "$WS_ID" >"$TARGET/etc/elvis/client.json"
+  chmod 0600 "$TARGET/etc/elvis/client.json"
+
+  for m in dev dev/pts proc sys run; do mount --bind "/$m" "$TARGET/$m"; done
+  [ "$MODE" = uefi ] && mount --bind /sys/firmware/efi/efivars "$TARGET/sys/firmware/efi/efivars" 2>/dev/null || true
+  # Notfall-Admin: nur Textkonsole (die Anmeldemaske lässt nur ELVIS-Profilkonten zu)
+  chroot "$TARGET" useradd -m -u 1000 -G sudo -s /bin/bash -c "ELVIS Notfall-Admin" -p "$ADMIN_HASH" elvisadmin >>"$LOG" 2>&1
+
+  gauge 90 "Bootloader wird installiert …"
+  if [ "$MODE" = uefi ]; then
+    local opts="--target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=ubuntu --uefi-secure-boot"
+    case "$NVRAM" in
+      nvram) chroot "$TARGET" grub-install $opts >>"$LOG" 2>&1 ;;
+      removable) chroot "$TARGET" grub-install $opts --no-nvram >>"$LOG" 2>&1
+                 chroot "$TARGET" grub-install $opts --no-nvram --removable >>"$LOG" 2>&1 ;;
+      both) chroot "$TARGET" grub-install $opts >>"$LOG" 2>&1
+            chroot "$TARGET" grub-install $opts --no-nvram --removable >>"$LOG" 2>&1 ;;
+    esac
+  else
+    chroot "$TARGET" grub-install --target=i386-pc "$MBR_DISK" >>"$LOG" 2>&1
+  fi
+  chroot "$TARGET" update-grub >>"$LOG" 2>&1
+
+  gauge 97 "Abschließen …"
+  cp "$LOG" "$TARGET/var/log/elvis-install.log" || true
+  sync
+  umount_target
+  gauge 100 "Fertig"
+  sleep 1
+}
+
+( run_install ) | whiptail --title "$TITLE" --gauge "Installation läuft …" 8 74 0 >&3
+if [ "${PIPESTATUS[0]}" -ne 0 ]; then fail "Die Installation ist fehlgeschlagen. Die Platte $DISK ist unvollständig beschrieben – bitte erneut installieren."; fi
+log "Installation abgeschlossen"
+
+whiptail --title "$TITLE" --yes-button "Neu starten" --no-button "Ausschalten" --yesno \
+  "Installation abgeschlossen.\n\n„$HOST“ ist in ELVIS unter System → Arbeitsplätze registriert. Nach dem Neustart erscheint die ELVIS-Anmeldung.\n\nBitte vorher das Netzwerkkabel nicht entfernen, falls das UEFI zuerst vom Netzwerk startet – das Menü startet nach 10 Sekunden von der Festplatte." 15 74 >&3 \
+  && systemctl reboot || systemctl poweroff

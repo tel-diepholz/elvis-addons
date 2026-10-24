@@ -1,0 +1,177 @@
+# ELVIS Arbeitsplatz: installiert Notebooks per Netzwerkstart (PXE) mit einem Ubuntu-System (KDE Plasma), an dem
+# sich die Benutzer von ELVIS mit ihrer PIN anmelden. Alles läuft offline aus einem vorab gebauten Abbild.
+id: arbeitsplatz
+name: ELVIS Arbeitsplatz (PXE)
+version: 1.0.0
+description: >-
+  Notebooks per Netzwerkstart (PXE, UEFI mit Secure Boot oder BIOS) als ELVIS-Arbeitsplatz installieren: Ubuntu mit
+  KDE Plasma im Windows-11-Stil, Anmeldung mit den Benutzern und PINs aus ELVIS (auch offline für bekannte Benutzer),
+  ein Profil je Benutzer und Einsatz, keine automatischen Updates. Das Abbild wird einmalig mit Internet gebaut.
+icon: laptop
+url: https://ubuntu.com/
+# Arbeitsplätze sind x86-64-Notebooks; das Abbild wird nativ gebaut
+arch: [amd64]
+
+options:
+  elvisUrl:
+    type: string
+    label: Adresse von ELVIS
+    help: Wie die Notebooks ELVIS erreichen, z. B. http://192.168.1.10:8080 – ohne Pfad.
+    required: true
+    pattern: "^https?://[^/]+$"
+  interface:
+    type: string
+    label: Netzwerkschnittstelle für den Netzwerkstart
+    help: >-
+      Schnittstelle des Docker-Hosts im Netz der Notebooks, z. B. „eth0“. Leer = Schnittstelle der Standardroute.
+      Den DHCP-Server (Router) ergänzt das Addon nur (ProxyDHCP), Adressen vergibt weiter der Router.
+    default: ""
+    pattern: "^[A-Za-z0-9_.@-]{0,15}$"
+  httpPort:
+    type: int
+    label: HTTP-Port für Installer und Abbild
+    default: 8089
+    min: 1024
+    max: 65535
+  adminPassword:
+    type: password
+    label: Passwort des Notfall-Admins
+    help: >-
+      Lokales Konto „elvisadmin“ mit Root-Rechten, nur an der Textkonsole (Strg+Alt+F3), nicht an der Anmeldemaske.
+      Gilt für Notebooks, die nach einer Änderung installiert werden.
+    required: true
+  hostnamePrefix:
+    type: string
+    label: Präfix der Rechnernamen
+    help: Rechnername = Präfix + Ende der MAC-Adresse, z. B. „elvis-ap-3f2a“. Im Installer änderbar.
+    default: elvis-ap
+    pattern: "^[a-z][a-z0-9-]{0,40}$"
+  release:
+    type: select
+    label: Ubuntu-Version
+    choices:
+      - { value: noble, label: "Ubuntu 24.04 LTS (Plasma 5.27)" }
+    default: noble
+  timezone:
+    type: string
+    label: Zeitzone
+    default: Europe/Berlin
+    pattern: "^[A-Za-z_]+(/[A-Za-z_+-]+){0,2}$"
+  extraPackages:
+    type: string
+    label: Zusätzliche Pakete
+    help: Optional, durch Leerzeichen getrennt (Ubuntu-Paketnamen). Wirken ab dem nächsten Bau des Abbilds.
+    default: ""
+    pattern: "^[a-z0-9.+ -]*$"
+    maxLength: 500
+
+files:
+  volume: data
+  target: /addon
+  paths:
+    - build/rootfs.sh
+    - build/installer.sh
+    - build/netboot.sh
+    - installer/elvis-install
+    - installer/elvis-install.service
+    - installer/20-wired.network
+    - client/setup.sh
+    - client/elvis-clientd.py
+    - client/elvis-clientd.service
+    - client/pam-check.py
+    - client/pam.d-sddm
+    - client/sddm.conf
+    - client/99elvis-no-updates
+    - client/elvis-hinweis.py
+    - client/elvis-hinweis.desktop
+    - client/elvis.desktop
+    - client/start.svg
+    - client/wallpaper.svg
+    - client/xdg/kdeglobals
+    - client/xdg/kwinrc
+    - client/xdg/kscreenlockerrc
+    - client/xdg/baloofilerc
+    - client/xdg/kwalletrc
+    - client/xdg/plasma-welcomerc
+    - client/xdg/kcminputrc
+    - client/xdg/plasmarc
+    - client/lookandfeel/metadata.json
+    - client/lookandfeel/contents/defaults
+    - client/lookandfeel/contents/layouts/org.kde.plasma.desktop-layout.js
+    - client/sddm-theme/metadata.desktop
+    - client/sddm-theme/theme.conf
+    - client/sddm-theme/Main.qml
+
+builds:
+  builder:
+    context: docker/builder
+    files: [Dockerfile]
+    label: einmalig, ca. 1–2 Minuten
+  pxe:
+    context: docker/pxe
+    files: [Dockerfile, entrypoint.sh, grub.cfg.in, pxelinux.cfg.in, nginx.conf]
+    label: einmalig, unter 1 Minute
+
+jobs:
+  image:
+    label: Abbild bauen
+    description: >-
+      Lädt Ubuntu-Pakete und baut daraus das Arbeitsplatz-System, den Installer und die Netzwerkstart-Dateien
+      (einige GB Download, je nach Leitung 20–60 Minuten). Danach installiert das Addon ohne Internet.
+    runOnInstall: true
+    restartAfter: true
+    steps:
+      - label: Arbeitsplatz-System
+        image: build:builder
+        command: ["sh", "/data/addon/build/rootfs.sh"]
+        env:
+          RELEASE: "{{options.release}}"
+          TIMEZONE: "{{options.timezone}}"
+          EXTRA_PACKAGES: "{{options.extraPackages}}"
+        volumes:
+          - { name: data, target: /data }
+        # mmdebstrap braucht mount (proc, sys, dev) und Gerätedateien im chroot
+        capabilities: [SYS_ADMIN, MKNOD, SYS_CHROOT]
+        apparmor: unconfined
+        weight: 8
+      - label: Installer
+        image: build:builder
+        command: ["sh", "/data/addon/build/installer.sh"]
+        env:
+          RELEASE: "{{options.release}}"
+        volumes:
+          - { name: data, target: /data }
+        capabilities: [SYS_ADMIN, MKNOD, SYS_CHROOT]
+        apparmor: unconfined
+        weight: 2
+      - label: Netzwerkstart-Dateien
+        image: build:builder
+        command: ["sh", "/data/addon/build/netboot.sh"]
+        env:
+          RELEASE: "{{options.release}}"
+        volumes:
+          - { name: data, target: /data }
+        weight: 1
+
+containers:
+  # ProxyDHCP + TFTP (dnsmasq) und HTTP (nginx) im Netz des Hosts; DHCP-Broadcasts brauchen das Host-Netz
+  - name: pxe
+    image: build:pxe
+    network: host
+    capabilities: [NET_ADMIN, NET_RAW, NET_BIND_SERVICE]
+    waitForJob: image
+    env:
+      INTERFACE: "{{options.interface}}"
+      HTTP_PORT: "{{options.httpPort}}"
+      ELVIS_URL: "{{options.elvisUrl}}"
+      ENROLL_TOKEN: "{{addon.secret}}"
+      ADMIN_PASSWORD: "{{options.adminPassword}}"
+      HOSTNAME_PREFIX: "{{options.hostnamePrefix}}"
+    volumes:
+      - { name: data, target: /data, readOnly: true }
+
+provides:
+  workstations:
+    - id: ap
+      name: Arbeitsplätze
+      token: "{{addon.secret}}"

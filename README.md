@@ -9,6 +9,7 @@ InformationsSystem. ELVIS installiert sie als Docker-Container auf den Servern i
 | [`ortssuche`](ortssuche/addon.yaml) | Ortssuche und Ortsumrisse für die Karte ohne Internet: Nominatim mit OSM-Daten von Geofabrik (Deutschland ca. 100 GB, Import 8–12 h), aktuell über Replikation |
 | [`collabora`](collabora/addon.yaml) | Office-Dokumente und Vorlagen im Browser bearbeiten (Collabora Online, WOPI), auch gemeinsam |
 | [`druckserver`](druckserver/addon.yaml) | Drucker im Fahrzeug über CUPS (LAN oder USB), optional Gastdrucker im Gastnetz für iPhone (AirPrint), Android und Windows ohne App |
+| [`arbeitsplatz`](arbeitsplatz/addon.yaml) | Notebooks per PXE als ELVIS-Arbeitsplatz installieren (Ubuntu, KDE Plasma im Windows-11-Stil), Anmeldung mit ELVIS-Benutzern und PIN, Profil je Einsatz, keine Updates |
 | [`ndi-gateway`](ndi-gateway/addon.yaml) | NDI-Quellen im Browser: GStreamer → H.264 → MediaMTX → WebRTC, Encoder CPU/VA-API/NVENC |
 | [`hello`](hello/addon.yaml) | Kleines Beispiel zum Ausprobieren der Addon-Verwaltung |
 

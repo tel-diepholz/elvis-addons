@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3840 2160" preserveAspectRatio="xMidYMid slice">
+  <!-- Hintergrund ELVIS Arbeitsplatz: hellblauer Verlauf mit weicher „Blüte“ in der Mitte (angelehnt an Windows 11) -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#dbe9f7"/>
+      <stop offset="1" stop-color="#a9c8ea"/>
+    </linearGradient>
+    <radialGradient id="p1" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#5aa9ff"/>
+      <stop offset="0.6" stop-color="#1a73e8"/>
+      <stop offset="1" stop-color="#0b3f91"/>
+    </radialGradient>
+    <radialGradient id="p2" cx="0.5" cy="0.4" r="0.6">
+      <stop offset="0" stop-color="#9fd0ff"/>
+      <stop offset="1" stop-color="#1f6fd1"/>
+    </radialGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="18"/></filter>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="120"/></filter>
+  </defs>
+  <rect width="3840" height="2160" fill="url(#bg)"/>
+  <ellipse cx="1920" cy="1260" rx="1150" ry="620" fill="#4f8fe0" opacity="0.45" filter="url(#glow)"/>
+  <g transform="translate(1920 1240)" filter="url(#soft)">
+    <path d="M0 -520 C 260 -360 380 -80 0 260 C -380 -80 -260 -360 0 -520 Z" fill="url(#p2)" opacity="0.85" transform="rotate(-62)"/>
+    <path d="M0 -520 C 260 -360 380 -80 0 260 C -380 -80 -260 -360 0 -520 Z" fill="url(#p2)" opacity="0.85" transform="rotate(62)"/>
+    <path d="M0 -600 C 300 -420 420 -100 0 300 C -420 -100 -300 -420 0 -600 Z" fill="url(#p1)" opacity="0.95"/>
+    <path d="M0 -460 C 230 -320 330 -80 0 230 C -330 -80 -230 -320 0 -460 Z" fill="url(#p1)" opacity="0.9" transform="rotate(-28)"/>
+    <path d="M0 -460 C 230 -320 330 -80 0 230 C -330 -80 -230 -320 0 -460 Z" fill="url(#p1)" opacity="0.9" transform="rotate(28)"/>
+  </g>
+</svg>

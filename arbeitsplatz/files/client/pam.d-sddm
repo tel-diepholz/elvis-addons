@@ -1,0 +1,16 @@
+#%PAM-1.0
+# ELVIS Arbeitsplatz: an der Anmeldemaske nur ELVIS-Profilkonten (UID 50000–59999), geprüft per Einmalpasswort
+# von elvis-clientd (die PIN prüft vorher ELVIS bzw. offline der Dienst). Lokale Passwörter spielen keine Rolle.
+auth      requisite   pam_nologin.so
+auth      requisite   pam_succeed_if.so uid >= 50000 uid <= 59999 quiet
+auth      required    pam_exec.so quiet expose_authtok /usr/lib/elvis/pam-check
+auth      optional    pam_permit.so
+
+@include common-account
+
+session   required    pam_limits.so
+session   required    pam_loginuid.so
+session   optional    pam_keyinit.so force revoke
+@include common-session
+session   optional    pam_env.so readenv=1
+session   optional    pam_env.so readenv=1 envfile=/etc/default/locale

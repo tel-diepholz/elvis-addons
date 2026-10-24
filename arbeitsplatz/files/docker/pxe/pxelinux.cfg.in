@@ -1,0 +1,16 @@
+# Netzwerkstart BIOS. Standard ist die Festplatte – installiert wird nur auf ausdrückliche Auswahl.
+UI menu.c32
+PROMPT 0
+TIMEOUT 100
+MENU TITLE ELVIS Netzwerkstart
+DEFAULT local
+
+LABEL local
+  MENU LABEL Von Festplatte starten
+  LOCALBOOT 0
+
+LABEL install
+  MENU LABEL ELVIS Arbeitsplatz installieren (Abbild @VERSION@)
+  KERNEL @BASE@/tftp/installer/vmlinuz
+  INITRD @BASE@/tftp/installer/initrd.img
+  APPEND boot=live fetch=@BASE@/images/installer/filesystem.squashfs ip=dhcp elvis.config=@BASE@/config/installer.env quiet

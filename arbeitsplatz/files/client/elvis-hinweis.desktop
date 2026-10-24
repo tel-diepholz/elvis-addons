@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=ELVIS Hinweis zum Profil
+Exec=/usr/lib/elvis/elvis-hinweis
+OnlyShowIn=KDE;
+X-KDE-autostart-phase=2
+NoDisplay=true

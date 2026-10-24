@@ -1,0 +1,7 @@
+[Daemon]
+Autolock=true
+Timeout=15
+LockOnResume=true
+
+[Greeter][Wallpaper][org.kde.image][General]
+Image=/usr/share/wallpapers/ELVIS/

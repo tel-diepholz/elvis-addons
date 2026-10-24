@@ -1,0 +1,13 @@
+{
+    "KPlugin": {
+        "Authors": [{ "Name": "ELVIS" }],
+        "Category": "",
+        "Description": "ELVIS Arbeitsplatz: Taskleiste unten mit zentrierten Symbolen, helles Fluent-Design",
+        "Id": "de.elvis.desktop",
+        "License": "GPL-3.0",
+        "Name": "ELVIS Arbeitsplatz",
+        "Version": "1.0"
+    },
+    "KPackageStructure": "Plasma/LookAndFeel",
+    "X-Plasma-MainScript": "defaults"
+}

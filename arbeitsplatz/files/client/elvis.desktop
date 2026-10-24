@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=ELVIS
+Comment=ELVIS im Browser öffnen
+Exec=sh -c 'exec firefox --new-window "$(cat /etc/elvis/url 2>/dev/null)"'
+Icon=/usr/share/elvis/start.svg
+Categories=Network;
