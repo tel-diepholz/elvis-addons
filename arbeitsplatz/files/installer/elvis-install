@@ -7,8 +7,9 @@ LOG=/tmp/elvis-install.log
 TARGET=/mnt/target
 TITLE="ELVIS Arbeitsplatz – Installation"
 ESP_GUID=c12a7328-f81f-11d2-ba4b-00a0c93ec93b
-# fd 3 = Terminal (whiptail zeichnet auf stdout/stderr); Ausgaben der Werkzeuge gehen einzeln ins Protokoll
-exec 3>&1
+# fd 3 und 4 = Terminal: whiptail zeichnet auf stdout und gibt die Auswahl auf stderr aus. Die Fehlerausgabe des
+# Dienstes geht ins Journal – Menüs dürfen daher nie über stderr zeichnen. Werkzeuge schreiben einzeln ins Protokoll.
+exec 3>&1 4>&1
 log() { printf '%s %s\n' "$(date +%T)" "$*" >>"$LOG"; }
 
 # --- Oberfläche ---
@@ -18,9 +19,9 @@ yesno() { whiptail --title "$TITLE" --yes-button "${3:-Ja}" --no-button "${4:-Ne
 # Auswahl: gibt das Kennzeichen aus; Abbrechen → Rückgabewert 1
 menu() {
   local text=$1 height=$2; shift 2
-  whiptail --title "$TITLE" --ok-button "Auswählen" --cancel-button "Zurück" --notags --menu "$text" "$height" 76 $(( height - 8 )) "$@" 3>&1 1>&2 2>&3
+  whiptail --title "$TITLE" --ok-button "Auswählen" --cancel-button "Zurück" --notags --menu "$text" "$height" 76 $(( height - 8 )) "$@" 3>&1 1>&4 2>&3
 }
-input() { whiptail --title "$TITLE" --ok-button "Weiter" --cancel-button "Zurück" --inputbox "$1" 10 74 "$2" 3>&1 1>&2 2>&3; }
+input() { whiptail --title "$TITLE" --ok-button "Weiter" --cancel-button "Zurück" --inputbox "$1" 10 74 "$2" 3>&1 1>&4 2>&3; }
 
 fail() {
   log "FEHLER: $1"
@@ -32,7 +33,7 @@ finish_menu() {
   while :; do
     local c
     c=$(whiptail --title "$TITLE" --nocancel --notags --menu "Wie geht es weiter?" 14 60 4 \
-      reboot "Neu starten" poweroff "Ausschalten" shell "Shell öffnen (Fehlersuche)" retry "Installation neu beginnen" 3>&1 1>&2 2>&3)
+      reboot "Neu starten" poweroff "Ausschalten" shell "Shell öffnen (Fehlersuche)" retry "Installation neu beginnen" 3>&1 1>&4 2>&3)
     case "$c" in
       reboot) umount_target; systemctl reboot; exit 0 ;;
       poweroff) umount_target; systemctl poweroff; exit 0 ;;
@@ -52,6 +53,17 @@ umount_target() {
 # --- Konfiguration vom Addon (elvis.config=<url> auf der Kernel-Kommandozeile) ---
 
 CONFIG_URL=$(tr ' ' '\n' </proc/cmdline | sed -n 's/^elvis\.config=//p' | head -n1)
+
+# Aktuelle Fassung dieses Skripts vom Addon holen: Korrekturen wirken nach einem Addon-Update sofort,
+# ohne das Installer-System neu zu bauen.
+if [ -z "${ELVIS_INSTALL_FRESH:-}" ] && [ -n "$CONFIG_URL" ]; then
+  if curl -fsS --retry 5 --retry-delay 2 --retry-all-errors -o /tmp/elvis-install.new "${CONFIG_URL%/config/*}/installer/elvis-install" 2>>"$LOG" \
+    && bash -n /tmp/elvis-install.new 2>>"$LOG"; then
+    log "Aktuelle Installer-Fassung vom Addon"
+    ELVIS_INSTALL_FRESH=1 exec bash /tmp/elvis-install.new
+  fi
+  log "Installer-Fassung vom Addon nicht verfügbar – nutze die eingebaute"
+fi
 CONF=$(curl -fsS --retry 10 --retry-delay 2 --retry-all-errors "$CONFIG_URL" 2>>"$LOG") || fail "Konfiguration vom Addon nicht erreichbar:\n$CONFIG_URL"
 cfg() { printf '%s\n' "$CONF" | sed -n "s/^$1=//p" | head -n1 | base64 -d 2>/dev/null; }
 ELVIS_URL=$(cfg ELVIS_URL)
@@ -162,7 +174,7 @@ while :; do
     BL="MBR von $MBR_DISK"
   fi
   SUMMARY="Zielplatte:   $(disk_line "$DISK")\nBootloader:   $BL\nRechnername:  $HOST\n\nBisheriger Inhalt von $DISK:\n${PARTS:-  (keine Partitionen)}\n\nALLE DATEN AUF $DISK WERDEN GELÖSCHT."
-  CONFIRM=$(whiptail --title "$TITLE – Bestätigung" --ok-button "Installieren" --cancel-button "Zurück" --inputbox "$SUMMARY\n\nZum Fortfahren JA eintippen:" 24 76 "" 3>&1 1>&2 2>&3) || continue
+  CONFIRM=$(whiptail --title "$TITLE – Bestätigung" --ok-button "Installieren" --cancel-button "Zurück" --inputbox "$SUMMARY\n\nZum Fortfahren JA eintippen:" 24 76 "" 3>&1 1>&4 2>&3) || continue
   [ "$CONFIRM" = JA ] && break
   msg "Nicht bestätigt – es wurde nichts verändert."
 done

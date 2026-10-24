@@ -2,7 +2,7 @@
 # sich die Benutzer von ELVIS mit ihrer PIN anmelden. Alles läuft offline aus einem vorab gebauten Abbild.
 id: arbeitsplatz
 name: ELVIS Arbeitsplatz (PXE)
-version: 1.0.1
+version: 1.0.2
 description: >-
   Notebooks per Netzwerkstart (PXE, UEFI mit Secure Boot oder BIOS) als ELVIS-Arbeitsplatz installieren: Ubuntu mit
   KDE Plasma im Windows-11-Stil, Anmeldung mit den Benutzern und PINs aus ELVIS (auch offline für bekannte Benutzer),
@@ -144,6 +144,32 @@ jobs:
         capabilities: [SYS_ADMIN, MKNOD, SYS_CHROOT]
         apparmor: unconfined
         weight: 2
+      - label: Netzwerkstart-Dateien
+        image: build:builder
+        command: ["sh", "/data/addon/build/netboot.sh"]
+        env:
+          RELEASE: "{{options.release}}"
+        volumes:
+          - { name: data, target: /data }
+        weight: 1
+
+  installer:
+    label: Installer neu bauen
+    description: >-
+      Baut nur das Installer-System und die Netzwerkstart-Dateien neu (wenige Minuten, mit Internet) – das
+      Arbeitsplatz-Abbild bleibt unverändert.
+    restartAfter: true
+    steps:
+      - label: Installer
+        image: build:builder
+        command: ["sh", "/data/addon/build/installer.sh"]
+        env:
+          RELEASE: "{{options.release}}"
+        volumes:
+          - { name: data, target: /data }
+        capabilities: [SYS_ADMIN, MKNOD, SYS_CHROOT]
+        apparmor: unconfined
+        weight: 3
       - label: Netzwerkstart-Dateien
         image: build:builder
         command: ["sh", "/data/addon/build/netboot.sh"]
