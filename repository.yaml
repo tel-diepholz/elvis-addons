@@ -5,3 +5,5 @@ addons:
   - kartenserver
   - ndi-gateway
   - ortssuche
+  - collabora
+  - druckserver

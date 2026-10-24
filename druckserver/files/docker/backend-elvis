@@ -1,0 +1,45 @@
+#!/bin/sh
+# CUPS-Backend „elvis“: reicht den fertig gewandelten Auftrag (PDF) an ELVIS weiter.
+# Aufruf durch CUPS: elvis job-id benutzer titel kopien optionen [datei]
+if [ $# -eq 0 ]; then
+  echo 'network elvis "Unknown" "ELVIS (Gastdrucker)"'
+  exit 0
+fi
+job=$1 user=$2 title=$3 copies=$4
+
+# Rückgabewerte nach cups/backend.h
+OK=0 FAILED=1 CANCEL=5
+
+. /etc/cups/elvis-guest.env
+
+tmp=$(mktemp)
+trap 'rm -f "$tmp" "$tmp.out"' EXIT
+if [ -n "${6:-}" ]; then cat "$6" > "$tmp"; else cat > "$tmp"; fi
+
+# Absenderadresse (job-originating-host-name) aus der IPP-Auftragsdatei im Spool
+control=/var/spool/cups/c$(printf '%05d' "$job")
+client=$(perl -0777 -ne 'print substr($_, $+[0], unpack("n", $1)) if /job-originating-host-name(..)/s' "$control" 2>/dev/null)
+
+enc() { perl -e '$_ = shift; s/([^A-Za-z0-9._~-])/sprintf("%%%02X", ord($1))/ge; print' "$1"; }
+
+code=$(curl -sS -o "$tmp.out" -w '%{http_code}' --max-time 180 \
+  -H "Authorization: Bearer $ELVIS_TOKEN" \
+  -H 'Content-Type: application/pdf' \
+  -H "X-Job-Name: $(enc "$title")" \
+  -H "X-Job-User: $(enc "$user")" \
+  -H "X-Job-Copies: $copies" \
+  -H "X-Job-Client: $(enc "$client")" \
+  --data-binary @"$tmp" "$ELVIS_URL/api/printing/guest/submit" 2>&1) || {
+  echo "ERROR: ELVIS nicht erreichbar ($code)" >&2
+  exit $FAILED
+}
+
+case "$code" in
+  2??)
+    echo "INFO: an ELVIS übergeben" >&2
+    exit $OK ;;
+  *)
+    msg=$(sed -n 's/.*"error":"\([^"]*\)".*/\1/p' "$tmp.out")
+    echo "ERROR: ${msg:-ELVIS lehnt den Auftrag ab (HTTP $code)}" >&2
+    exit $CANCEL ;;
+esac

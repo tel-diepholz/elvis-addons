@@ -1,0 +1,64 @@
+# Collabora Online Development Edition (CODE): Office-Dokumente im Browser bearbeiten – auch gemeinsam.
+# ELVIS ist der WOPI-Host: Collabora lädt und speichert die Dateien über /api/wopi/… bei ELVIS.
+id: collabora
+name: Office (Collabora)
+version: 1.0.0
+description: >-
+  Dokumente und Vorlagen (Word, Excel, PowerPoint, OpenDocument) direkt in ELVIS bearbeiten, mehrere Bearbeiter
+  gleichzeitig. Braucht etwa 2 GB Arbeitsspeicher auf dem Docker-Host.
+icon: file-text
+url: https://www.collaboraonline.com/code/
+arch: [amd64, arm64]
+
+options:
+  elvisUrl:
+    type: string
+    label: Adresse von ELVIS
+    help: >-
+      Wie der Docker-Host ELVIS erreicht, z. B. http://192.168.1.10:8080 – ohne Pfad. Unter dieser Adresse holt und
+      speichert Collabora die Dokumente; nur Anfragen von dort werden angenommen.
+    required: true
+    pattern: "^https?://[^/]+$"
+  browserOrigin:
+    type: string
+    label: Adresse von ELVIS im Browser
+    help: >-
+      Leer = wie oben. Nur nötig, wenn Arbeitsplätze ELVIS unter einer anderen Adresse öffnen (z. B. Hostname statt IP);
+      der Editor lässt sich nur in diese Seite einbetten.
+    pattern: "^(https?://[^/]+)?$"
+  adminPassword:
+    type: password
+    label: Passwort der Collabora-Verwaltung
+    help: Für die Verwaltungsseite von Collabora (/browser/dist/admin/admin.html), Benutzer „admin“.
+    required: true
+  port:
+    type: int
+    label: Port auf dem Host
+    default: 9980
+    min: 1024
+    max: 65535
+
+containers:
+  - name: code
+    image: collabora/code:26.04.4.2.1
+    # Collabora richtet seine Sandbox (Jails) mit Bind-Mounts ein
+    capabilities: [MKNOD, SYS_ADMIN]
+    env:
+      aliasgroup1: "{{options.elvisUrl}}"
+      username: admin
+      password: "{{options.adminPassword}}"
+      dictionaries: de_DE en_GB en_US
+      extra_params: >-
+        --o:ssl.enable=false --o:ssl.termination=false
+        --o:net.frame_ancestors={{options.elvisUrl}} {{options.browserOrigin}}
+        --o:user_interface.mode=tabbed --o:welcome.enable=false
+    ports:
+      - container: 9980
+        host: "{{options.port}}"
+
+provides:
+  office:
+    - id: code
+      name: Collabora Online
+      url: "http://{{host.address}}:{{options.port}}"
+      wopiBase: "{{options.elvisUrl}}"

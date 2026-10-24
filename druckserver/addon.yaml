@@ -1,0 +1,128 @@
+# Druckserver (CUPS): betreibt die Drucker im Fahrzeug. ELVIS listet die Drucker per IPP und reicht PDFs weiter,
+# die Arbeitsplätze unter „Drucken“ hochladen – auch ohne Anmeldung.
+id: druckserver
+name: Druckserver (CUPS)
+version: 1.1.0
+description: >-
+  Drucker im Fahrzeug-LAN oder per USB über CUPS ansteuern. In ELVIS können alle Arbeitsplätze unter „Drucken“ PDFs
+  mit gängigen Einstellungen (Kopien, beidseitig, Papier, Farbe, Seiten) ausgeben; auf Wunsch legt ELVIS jeden Druck
+  im laufenden Einsatz ab. Drucker werden in der CUPS-Verwaltung (Port 631) oder über die Option „Drucker“ eingerichtet.
+  Optional bietet ein Gastdrucker im Gastnetz Drucken ohne App für iPhone (AirPrint), Android und Windows.
+icon: printer
+url: https://openprinting.github.io/cups/
+arch: [amd64, arm64]
+
+options:
+  adminPassword:
+    type: password
+    label: Passwort der CUPS-Verwaltung
+    help: Für http://<Docker-Host>:<Port>/admin, Benutzer „admin“. Dort lassen sich Drucker anlegen, Treiber wählen und Warteschlangen leeren.
+    required: true
+  printers:
+    type: string
+    label: Drucker
+    help: >-
+      Optional, kommagetrennt „Name=Adresse“, z. B. „Laser_ELW=ipp://192.168.1.50/ipp/print, Plotter=socket://192.168.1.51:9100“.
+      Fehlende Drucker richtet das Addon beim Start als IPP-Everywhere-Drucker (ohne Treiber) ein; bestehende bleiben unverändert.
+    default: ""
+    maxLength: 1000
+  usb:
+    type: bool
+    label: USB-Drucker durchreichen
+    help: Reicht /dev/bus/usb in den Container durch, damit CUPS am Docker-Host angeschlossene Drucker findet.
+    default: false
+  port:
+    type: int
+    label: Port auf dem Host
+    default: 631
+    min: 1
+    max: 65535
+  guestEnabled:
+    type: bool
+    label: Gastdrucker im Gastnetz
+    help: >-
+      Virtueller Drucker, den Gäste ohne App finden (iPhone/iPad per AirPrint, Android, Windows 10/11). Aufträge gehen
+      als PDF an ELVIS (System → Druckserver: sofort drucken oder Freigabe). Der Docker-Host braucht eine Adresse im Gastnetz.
+    default: false
+  guestInterface:
+    type: string
+    label: Netzwerkschnittstelle zum Gastnetz
+    help: >-
+      Schnittstelle des Docker-Hosts im Gastnetz, z. B. „eth0.20“ oder „br-gast“. Gastdrucker und Bonjour laufen nur dort.
+      Leer = alle Schnittstellen (dann ist der Gastdrucker auch im Fahrzeug-LAN zu sehen).
+    default: ""
+    pattern: "^[A-Za-z0-9_.@-]{0,15}$"
+  guestName:
+    type: string
+    label: Name des Gastdruckers
+    help: So erscheint der Drucker auf den Geräten der Gäste.
+    default: ELVIS Gastdrucker
+    maxLength: 60
+    pattern: "^[^<>&\"']+$"
+  guestPort:
+    type: int
+    label: Port des Gastdruckers
+    help: IPP-Port im Gastnetz (nicht 631, den belegt der Druckserver selbst).
+    default: 8631
+    min: 1024
+    max: 65535
+  elvisUrl:
+    type: string
+    label: Adresse von ELVIS
+    help: >-
+      Nur für den Gastdrucker: wie der Docker-Host ELVIS erreicht, z. B. http://192.168.1.10:8080 – ohne Pfad. Dorthin
+      gibt der Gastdrucker die Aufträge weiter.
+    default: ""
+    pattern: "^(https?://[^/]+)?$"
+
+files:
+  volume: data
+  target: /addon
+  paths:
+    - cupsd.conf
+
+builds:
+  cups:
+    context: docker
+    files: [Dockerfile, entrypoint.sh, guest.sh, backend-elvis, gastdrucker.ppd]
+    label: einmalig, ca. 2–5 Minuten
+
+containers:
+  - name: cups
+    image: build:cups
+    env:
+      ADMIN_PASSWORD: "{{options.adminPassword}}"
+      PRINTERS: "{{options.printers}}"
+    volumes:
+      - { name: data, target: /data, readOnly: true }
+      # Drucker, Treiber (PPD) und Einstellungen aus der CUPS-Verwaltung bleiben bei Updates erhalten
+      - { name: config, target: /etc/cups }
+    devices:
+      - { path: /dev/bus/usb, when: { option: usb, equals: "true" } }
+    ports:
+      - container: 631
+        host: "{{options.port}}"
+
+  # Gastdrucker: eigener CUPS im Gastnetz. Bonjour braucht Multicast, daher das Netzwerk des Hosts.
+  # Ist die Option aus, wartet der Container nur.
+  - name: gast
+    image: build:cups
+    command: [guest]
+    network: host
+    env:
+      GUEST_ENABLED: "{{options.guestEnabled}}"
+      GUEST_INTERFACE: "{{options.guestInterface}}"
+      GUEST_NAME: "{{options.guestName}}"
+      GUEST_PORT: "{{options.guestPort}}"
+      ELVIS_URL: "{{options.elvisUrl}}"
+      ELVIS_TOKEN: "{{addon.secret}}"
+
+provides:
+  printServers:
+    - id: cups
+      name: Druckserver
+      url: "http://{{host.address}}:{{options.port}}"
+  guestPrinters:
+    - id: gast
+      name: Gastdrucker
+      token: "{{addon.secret}}"
