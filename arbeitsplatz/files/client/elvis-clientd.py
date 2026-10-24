@@ -19,13 +19,15 @@ import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 CONFIG = "/etc/elvis/client.json"
 STATE_DIR = "/var/lib/elvis-client"
 RUN_DIR = "/run/elvis-client"
 CACHE = f"{STATE_DIR}/cache.json"
 VERIFIERS = f"{STATE_DIR}/verifiers.json"
 UPDATE_FILE = f"{STATE_DIR}/update.json"  # zuletzt bearbeiteter Update-Auftrag
+WIFI_FILE = f"{STATE_DIR}/wifi.json"  # Stand der hinterlegten Betriebs-WLAN-Verbindung
+WIFI_CONNECTION = "ELVIS Betrieb"
 LISTEN = ("127.0.0.1", 7171)
 SYNC_S = 30
 HEARTBEAT_S = 60
@@ -146,7 +148,49 @@ def sync():
         cache.update(users=state["users"], incident=state["incident"], workstation=state["workstation"], lastSync=state["serverTime"], revoked=False)
         save(CACHE, cache)
         save(VERIFIERS, verifiers)
+    if "wifi" in state:  # ältere ELVIS-Versionen liefern kein WLAN – dann nichts anfassen
+        apply_wifi(state["wifi"])
     check_update(state.get("update"))
+
+
+# --- Betriebs-WLAN aus ELVIS als systemweite Verbindung (NetworkManager) ---
+
+
+def apply_wifi(wifi):
+    """Verbindung „ELVIS Betrieb“ anlegen, ändern oder entfernen – nur wenn sich etwas geändert hat"""
+    want = {"ssid": wifi["ssid"], "psk": hashlib.sha256(wifi["psk"].encode()).hexdigest()} if wifi else None
+    if load(WIFI_FILE, {}).get("applied") == want:
+        return
+    nm = ["nmcli", "--wait", "10"]
+    try:
+        names = subprocess.run(nm + ["-t", "-f", "NAME", "connection", "show"], capture_output=True, text=True, timeout=15).stdout.splitlines()
+        exists = WIFI_CONNECTION in names
+        if wifi:
+            settings = [
+                "802-11-wireless.ssid", wifi["ssid"],
+                "802-11-wireless.mode", "infrastructure",
+                "wifi-sec.key-mgmt", "wpa-psk",
+                "wifi-sec.psk", wifi["psk"],
+                "connection.autoconnect", "yes",
+                "connection.autoconnect-priority", "10",
+                "connection.permissions", "",
+                "ipv4.method", "auto",
+                "ipv6.method", "auto",
+            ]  # fmt: skip
+            cmd = nm + (["connection", "modify", WIFI_CONNECTION] if exists else ["connection", "add", "type", "wifi", "con-name", WIFI_CONNECTION, "ifname", "*"]) + settings
+        elif exists:
+            cmd = nm + ["connection", "delete", WIFI_CONNECTION]
+        else:
+            cmd = None
+        if cmd:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            if r.returncode != 0:
+                log("Betriebs-WLAN: nmcli fehlgeschlagen:", (r.stderr or r.stdout).strip())
+                return
+        save(WIFI_FILE, {"applied": want})
+        log(f"Betriebs-WLAN: {'„' + wifi['ssid'] + '“ hinterlegt' if wifi else 'Verbindung entfernt'}")
+    except (OSError, subprocess.SubprocessError) as e:
+        log("Betriebs-WLAN: NetworkManager nicht erreichbar:", e)
 
 
 # --- Updates (von ELVIS angestoßen; nur wenn niemand angemeldet ist) ---
