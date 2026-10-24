@@ -1,0 +1,16 @@
+# Installer-ISO, BIOS. Lädt das Installer-System per Netz vom Addon.
+UI menu.c32
+PROMPT 0
+TIMEOUT 100
+MENU TITLE ELVIS Arbeitsplatz – Installer
+DEFAULT install
+
+LABEL install
+  MENU LABEL ELVIS Arbeitsplatz installieren (Abbild @VERSION@)
+  KERNEL /installer/vmlinuz
+  INITRD /installer/initrd.img
+  APPEND boot=live fetch=@BASE@/images/installer/filesystem.squashfs ip=dhcp elvis.config=@BASE@/config/installer.env quiet
+
+LABEL local
+  MENU LABEL Von Festplatte starten
+  LOCALBOOT 0x80

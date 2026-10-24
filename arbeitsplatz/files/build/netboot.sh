@@ -19,5 +19,9 @@ install -m 0644 "$SHIM" "$TFTP/bootx64.efi"
 install -m 0644 "$X/usr/lib/grub/x86_64-efi-signed/grubnetx64.efi.signed" "$TFTP/grubx64.efi"
 install -m 0644 "$X/usr/lib/PXELINUX/lpxelinux.0" "$TFTP/lpxelinux.0"
 for f in ldlinux.c32 menu.c32 libutil.c32; do install -m 0644 "$X/usr/lib/syslinux/modules/bios/$f" "$TFTP/$f"; done
+# Für die Installer-ISO (UEFI): shim + GRUB für CD/USB (sucht /.disk/info und liest /boot/grub/grub.cfg)
+install -d "$TFTP/cd"
+install -m 0644 "$SHIM" "$TFTP/cd/bootx64.efi"
+install -m 0644 "$X/usr/lib/grub/x86_64-efi-signed/gcdx64.efi.signed" "$TFTP/cd/grubx64.efi"
 rm -rf "$WORK"
 echo "ELVIS_PROGRESS 100 fertig"

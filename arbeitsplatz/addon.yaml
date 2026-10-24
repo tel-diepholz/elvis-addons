@@ -2,7 +2,7 @@
 # sich die Benutzer von ELVIS mit ihrer PIN anmelden. Alles läuft offline aus einem vorab gebauten Abbild.
 id: arbeitsplatz
 name: ELVIS Arbeitsplatz (PXE)
-version: 1.0.3
+version: 1.1.0
 description: >-
   Notebooks per Netzwerkstart (PXE, UEFI mit Secure Boot oder BIOS) als ELVIS-Arbeitsplatz installieren: Ubuntu mit
   KDE Plasma im Windows-11-Stil, Anmeldung mit den Benutzern und PINs aus ELVIS (auch offline für bekannte Benutzer),
@@ -110,7 +110,7 @@ builds:
     label: einmalig, ca. 1–2 Minuten
   pxe:
     context: docker/pxe
-    files: [Dockerfile, entrypoint.sh, grub.cfg.in, pxelinux.cfg.in, nginx.conf]
+    files: [Dockerfile, entrypoint.sh, grub.cfg.in, pxelinux.cfg.in, iso-grub.cfg.in, isolinux.cfg.in, nginx.conf]
     label: einmalig, unter 1 Minute
 
 jobs:
@@ -202,3 +202,4 @@ provides:
     - id: ap
       name: Arbeitsplätze
       token: "{{addon.secret}}"
+      installerIso: "http://{{host.address}}:{{options.httpPort}}/iso/elvis-installer.iso"

@@ -39,6 +39,35 @@ b64() { printf '%s' "$1" | base64 | tr -d '\n'; }
 } > /srv/config/installer.env
 chmod 0644 /srv/config/installer.env
 
+# Installer-ISO mit dieser Adresse (hybrid: CD oder USB-Stick, BIOS mit isolinux, UEFI mit shim/GRUB von Ubuntu).
+# Braucht cd/ aus dem Job („Installer neu bauen“); fehlt etwas, gibt es eben keine ISO.
+build_iso() {
+  W=/tmp/isoroot S=/usr/share/syslinux
+  for f in /srv/tftp/installer/vmlinuz /srv/tftp/installer/initrd.img /srv/tftp/cd/bootx64.efi /srv/tftp/cd/grubx64.efi; do
+    [ -f "$f" ] || { echo "Installer-ISO: $f fehlt – Job „Installer neu bauen“ ausführen" >&2; return 1; }
+  done
+  rm -rf "$W" && mkdir -p "$W/installer" "$W/isolinux" "$W/boot/grub" "$W/EFI/boot" "$W/.disk" /srv/iso
+  cp /srv/tftp/installer/vmlinuz /srv/tftp/installer/initrd.img "$W/installer/"
+  cp "$S/isolinux.bin" "$S/ldlinux.c32" "$S/menu.c32" "$S/libutil.c32" "$S/libcom32.c32" "$W/isolinux/"
+  render /usr/share/elvis/isolinux.cfg.in > "$W/isolinux/isolinux.cfg"
+  render /usr/share/elvis/iso-grub.cfg.in > "$W/boot/grub/grub.cfg"
+  echo "ELVIS Arbeitsplatz Installer $(cat /data/images/VERSION 2>/dev/null)" > "$W/.disk/info"
+  cp /srv/tftp/cd/bootx64.efi /srv/tftp/cd/grubx64.efi "$W/EFI/boot/"
+  # EFI-Bootabbild (FAT) mit shim und GRUB für El Torito und die GPT-Partition des USB-Sticks
+  dd if=/dev/zero of="$W/boot/efi.img" bs=1M count=8 status=none
+  mkfs.vfat -n ELVIS_EFI "$W/boot/efi.img" >/dev/null
+  mmd -i "$W/boot/efi.img" ::/EFI ::/EFI/boot
+  mcopy -i "$W/boot/efi.img" /srv/tftp/cd/bootx64.efi /srv/tftp/cd/grubx64.efi ::/EFI/boot/
+  xorriso -as mkisofs -quiet -r -J -l -V ELVIS_INSTALLER \
+    -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table \
+    -isohybrid-mbr "$S/isohdpfx.bin" \
+    -eltorito-alt-boot -e boot/efi.img -no-emul-boot -isohybrid-gpt-basdat \
+    -o /srv/iso/elvis-installer.iso.new "$W" && mv /srv/iso/elvis-installer.iso.new /srv/iso/elvis-installer.iso
+  rm -rf "$W"
+  echo "Installer-ISO: $BASE/iso/elvis-installer.iso ($(du -h /srv/iso/elvis-installer.iso | cut -f1))"
+}
+build_iso || true
+
 sed -i "s|@PORT@|$PORT|" /etc/nginx/nginx.conf
 nginx
 
