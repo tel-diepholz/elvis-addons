@@ -274,7 +274,11 @@ Rectangle {
                 visible: users.count === 0
                 color: "#ccffffff"
                 font.pixelSize: 15 * u
-                text: !info ? "" : info.revoked ? "Gesperrt" : search.text ? "Kein Treffer" : info.lastSync ? "Keine Benutzer" : "Noch keine Verbindung zu ELVIS"
+                width: userList.width - 24 * u
+                wrapMode: Text.WordWrap
+                horizontalAlignment: Text.AlignHCenter
+                text: !info ? "" : info.revoked ? "Gesperrt" : search.text ? "Kein Treffer" : info.lastSync ? "Keine Benutzer"
+                    : "Noch keine Verbindung zu ELVIS" + (info.error ? "\n" + info.error : "")
             }
         }
     }
@@ -296,7 +300,7 @@ Rectangle {
                 color: "white"
                 font.pixelSize: 14 * u
                 text: !serviceUp ? "Dienst nicht erreichbar"
-                    : !info ? "" : (info.online ? "● ELVIS verbunden" : "○ Offline")
+                    : !info ? "" : (info.online ? "● ELVIS verbunden" : "○ Offline" + (info.error ? ": " + info.error : ""))
                       + (info.workstation ? "  ·  " + info.workstation.name : "")
             }
         }

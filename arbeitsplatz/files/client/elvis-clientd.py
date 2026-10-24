@@ -19,7 +19,7 @@ import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 CONFIG = "/etc/elvis/client.json"
 STATE_DIR = "/var/lib/elvis-client"
 RUN_DIR = "/run/elvis-client"
@@ -100,6 +100,7 @@ def api(method, path, body=None):
 cache = load(CACHE, {"users": [], "incident": None, "workstation": None, "lastSync": None, "revoked": False})
 verifiers = load(VERIFIERS, {})  # userId (str) → {salt, hash, stamp}
 online = False
+last_error = None  # letzter Verbindungsfehler für die Anmeldemaske
 
 
 def is_revoked_error(e):
@@ -120,27 +121,44 @@ def revoke():
 
 
 def sync():
-    global online, verifiers
+    global online, verifiers, last_error
     try:
         state = api("GET", "/api/clients/state")
     except Offline as e:
-        if online:
+        if online or last_error is None:
             log("ELVIS nicht erreichbar:", e)
         online = False
+        last_error = describe(e)
         return
     except ApiError as e:
         online = True
+        last_error = None if is_revoked_error(e) else e.message
         if is_revoked_error(e):
             revoke()
         return
     with lock:
         online = True
+        last_error = None
         stamps = {str(u["id"]): u["pinStamp"] for u in state["users"]}
         # PIN geändert oder Benutzer gelöscht → Offline-Verifier verwerfen
         verifiers = {k: v for k, v in verifiers.items() if stamps.get(k) == v.get("stamp")}
         cache.update(users=state["users"], incident=state["incident"], workstation=state["workstation"], lastSync=state["serverTime"], revoked=False)
         save(CACHE, cache)
         save(VERIFIERS, verifiers)
+
+
+def describe(e):
+    """Verbindungsfehler verständlich für die Anmeldemaske"""
+    text = str(e)
+    if "Network is unreachable" in text or "No route to host" in text:
+        return "Kein Netzwerk – Kabel oder WLAN prüfen"
+    if "Connection refused" in text:
+        return f"{ELVIS} lehnt die Verbindung ab"
+    if "timed out" in text:
+        return f"{ELVIS} antwortet nicht"
+    if "Name or service not known" in text or "Temporary failure in name resolution" in text:
+        return "Adresse von ELVIS unbekannt (DNS)"
+    return text[:120]
 
 
 def scrypt(pin, salt):
@@ -273,6 +291,7 @@ def public_state():
             "online": online,
             "revoked": bool(cache.get("revoked")),
             "configured": bool(ELVIS and TOKEN),
+            "error": None if online else (last_error if ELVIS and TOKEN else f"{CONFIG} fehlt – Arbeitsplatz neu installieren"),
             "lastSync": cache.get("lastSync"),
             "workstation": cache.get("workstation"),
             "incident": cache.get("incident"),

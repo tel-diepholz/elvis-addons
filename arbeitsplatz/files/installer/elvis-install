@@ -54,10 +54,12 @@ umount_target() {
 
 CONFIG_URL=$(tr ' ' '\n' </proc/cmdline | sed -n 's/^elvis\.config=//p' | head -n1)
 
+ADDON_URL="${CONFIG_URL%/config/*}"
+
 # Aktuelle Fassung dieses Skripts vom Addon holen: Korrekturen wirken nach einem Addon-Update sofort,
 # ohne das Installer-System neu zu bauen.
 if [ -z "${ELVIS_INSTALL_FRESH:-}" ] && [ -n "$CONFIG_URL" ]; then
-  if curl -fsS --retry 5 --retry-delay 2 --retry-all-errors -o /tmp/elvis-install.new "${CONFIG_URL%/config/*}/installer/elvis-install" 2>>"$LOG" \
+  if curl -fsS --retry 5 --retry-delay 2 --retry-all-errors -o /tmp/elvis-install.new "$ADDON_URL/installer/elvis-install" 2>>"$LOG" \
     && bash -n /tmp/elvis-install.new 2>>"$LOG"; then
     log "Aktuelle Installer-Fassung vom Addon"
     ELVIS_INSTALL_FRESH=1 exec bash /tmp/elvis-install.new
@@ -253,6 +255,11 @@ run_install() {
   [ "$MODE" = uefi ] && mount --bind /sys/firmware/efi/efivars "$TARGET/sys/firmware/efi/efivars" 2>/dev/null || true
   # Notfall-Admin: nur Textkonsole (die Anmeldemaske lässt nur ELVIS-Profilkonten zu)
   chroot "$TARGET" useradd -m -u 1000 -G sudo -s /bin/bash -c "ELVIS Notfall-Admin" -p "$ADMIN_HASH" elvisadmin >>"$LOG" 2>&1
+  # Korrekturen am Client-System in der Fassung des Addons (Netzwerk, Dienst, Anmeldemaske)
+  if curl -fsS --retry 3 -o "$TARGET/tmp/elvis-post-install.sh" "$ADDON_URL/client/post-install.sh" >>"$LOG" 2>&1; then
+    chroot "$TARGET" env ADDON="$ADDON_URL" sh /tmp/elvis-post-install.sh >>"$LOG" 2>&1 || true
+    rm -f "$TARGET/tmp/elvis-post-install.sh"
+  fi
 
   gauge 90 "Bootloader wird installiert …"
   if [ "$MODE" = uefi ]; then

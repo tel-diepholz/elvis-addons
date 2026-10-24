@@ -2,7 +2,7 @@
 # sich die Benutzer von ELVIS mit ihrer PIN anmelden. Alles läuft offline aus einem vorab gebauten Abbild.
 id: arbeitsplatz
 name: ELVIS Arbeitsplatz (PXE)
-version: 1.0.2
+version: 1.0.3
 description: >-
   Notebooks per Netzwerkstart (PXE, UEFI mit Secure Boot oder BIOS) als ELVIS-Arbeitsplatz installieren: Ubuntu mit
   KDE Plasma im Windows-11-Stil, Anmeldung mit den Benutzern und PINs aus ELVIS (auch offline für bekannte Benutzer),
@@ -76,6 +76,7 @@ files:
     - installer/elvis-install.service
     - installer/20-wired.network
     - client/setup.sh
+    - client/post-install.sh
     - client/elvis-clientd.py
     - client/elvis-clientd.service
     - client/pam-check.py

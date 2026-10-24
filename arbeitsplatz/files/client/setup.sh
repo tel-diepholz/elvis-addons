@@ -72,6 +72,10 @@ install -D -m 0644 "$S/elvis-clientd.service" /etc/systemd/system/elvis-clientd.
 install -m 0644 "$S/pam.d-sddm" /etc/pam.d/sddm
 install -D -m 0755 "$S/elvis-hinweis.py" /usr/lib/elvis/elvis-hinweis
 install -D -m 0644 "$S/elvis-hinweis.desktop" /etc/xdg/autostart/elvis-hinweis.desktop
+# NetworkManager verwaltet auch Kabelanschlüsse (sonst bleiben sie ohne Adresse, Ubuntu überlässt sie netplan)
+: > /etc/NetworkManager/conf.d/10-globally-managed-devices.conf
+printf 'network:\n  version: 2\n  renderer: NetworkManager\n' > /etc/netplan/01-network-manager-all.yaml
+chmod 0600 /etc/netplan/01-network-manager-all.yaml
 systemctl enable elvis-clientd.service sddm.service NetworkManager.service cups.service
 systemctl set-default graphical.target
 # Profilkonten (UID 50000–59999) gehören in diese Gruppen; kein sudo
