@@ -5,8 +5,7 @@ InformationsSystem. ELVIS installiert sie als Docker-Container auf den Servern i
 
 | Addon | Zweck |
 |---|---|
-| [`kartenserver`](kartenserver/addon.yaml) | Eigene Kartenkacheln aus OpenStreetMap (Planetiler + tileserver-gl), offline nutzbar, mit Standard-, Dunkel- und Druckstil |
-| [`ortssuche`](ortssuche/addon.yaml) | Ortssuche und Ortsumrisse für die Karte ohne Internet: Nominatim mit OSM-Daten von Geofabrik (Deutschland ca. 100 GB, Import 8–12 h), aktuell über Replikation |
+| [`osm-daten`](osm-daten/addon.yaml) | Offline-Kartendaten aus OpenStreetMap in einem Rutsch: Kacheln (Planetiler + tileserver-gl, Standard/Dunkel/Druck), Ortssuche mit Umrissen (Nominatim), Routing (Valhalla) und Overpass – mehrere Geofabrik-Regionen, keine automatische Aktualisierung, Regionen jederzeit ergänzbar. Ersetzt `kartenserver` und `ortssuche` (vorher deinstallieren) |
 | [`collabora`](collabora/addon.yaml) | Office-Dokumente und Vorlagen im Browser bearbeiten (Collabora Online, WOPI), auch gemeinsam |
 | [`druckserver`](druckserver/addon.yaml) | Drucker im Fahrzeug über CUPS (LAN oder USB), optional Gastdrucker im Gastnetz für iPhone (AirPrint), Android und Windows ohne App |
 | [`arbeitsplatz`](arbeitsplatz/addon.yaml) | Notebooks per PXE als ELVIS-Arbeitsplatz installieren (Ubuntu, KDE Plasma im Windows-11-Stil), Anmeldung mit ELVIS-Benutzern und PIN, Profil je Einsatz, keine Updates |

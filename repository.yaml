@@ -2,9 +2,8 @@ name: ELVIS-Addons
 maintainer: tel-diepholz
 addons:
   - hello
-  - kartenserver
+  - osm-daten
   - ndi-gateway
-  - ortssuche
   - collabora
   - druckserver
   - arbeitsplatz

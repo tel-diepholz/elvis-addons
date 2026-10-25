@@ -1,0 +1,342 @@
+# Offline-Kartendaten aus OpenStreetMap: ein Satz Geofabrik-Auszüge, daraus in einem Job
+#   - Kacheln (Planetiler → tileserver-gl) in den Stilen Standard, Dunkel, Druck
+#   - Ortssuche mit Umrissen (Nominatim)
+#   - Routing (Valhalla)
+#   - Overpass-API
+# Keine automatische Aktualisierung: Daten ändern sich nur mit dem Job „Kartendaten bauen“. Kommt eine Region dazu
+# (z. B. Auslandseinsatz), lädt der Job nur diese und importiert sie in die Ortssuche nach.
+id: osm-daten
+name: OSM-Daten
+version: 1.0.0
+description: >-
+  Karte, Ortssuche, Routing und Overpass ohne Internet – alles aus denselben OpenStreetMap-Auszügen von Geofabrik.
+  Regionen lassen sich jederzeit ergänzen (Konfiguration ändern, dann „Kartendaten bauen“). Speicher grob 35× der
+  OSM-Daten (Deutschland etwa 160 GB), Erstbau Deutschland je nach Hardware 8–12 Stunden.
+icon: map
+url: https://download.geofabrik.de/
+arch: [amd64, arm64]
+
+options:
+  regions:
+    type: multiselect
+    label: Regionen
+    help: OSM-Auszüge von Geofabrik. Nach einer Änderung „Kartendaten bauen“ starten – geladen wird nur, was fehlt.
+    default: [europe/germany]
+    choices:
+      - { value: europe/germany, label: Deutschland (gesamt, ca. 4,5 GB) }
+      - { value: europe/germany/baden-wuerttemberg, label: Baden-Württemberg }
+      - { value: europe/germany/bayern, label: Bayern }
+      - { value: europe/germany/berlin, label: Berlin }
+      - { value: europe/germany/brandenburg, label: Brandenburg }
+      - { value: europe/germany/bremen, label: Bremen }
+      - { value: europe/germany/hamburg, label: Hamburg }
+      - { value: europe/germany/hessen, label: Hessen }
+      - { value: europe/germany/mecklenburg-vorpommern, label: Mecklenburg-Vorpommern }
+      - { value: europe/germany/niedersachsen, label: Niedersachsen }
+      - { value: europe/germany/nordrhein-westfalen, label: Nordrhein-Westfalen }
+      - { value: europe/germany/rheinland-pfalz, label: Rheinland-Pfalz }
+      - { value: europe/germany/saarland, label: Saarland }
+      - { value: europe/germany/sachsen, label: Sachsen }
+      - { value: europe/germany/sachsen-anhalt, label: Sachsen-Anhalt }
+      - { value: europe/germany/schleswig-holstein, label: Schleswig-Holstein }
+      - { value: europe/germany/thueringen, label: Thüringen }
+      - { value: europe/austria, label: Österreich }
+      - { value: europe/switzerland, label: Schweiz }
+      - { value: europe/netherlands, label: Niederlande }
+      - { value: europe/belgium, label: Belgien }
+      - { value: europe/luxembourg, label: Luxemburg }
+      - { value: europe/france, label: Frankreich }
+      - { value: europe/poland, label: Polen }
+      - { value: europe/czech-republic, label: Tschechien }
+      - { value: europe/denmark, label: Dänemark }
+      - { value: europe/italy, label: Italien }
+      - { value: europe/croatia, label: Kroatien }
+      - { value: europe/slovenia, label: Slowenien }
+      - { value: europe/greece, label: Griechenland }
+      - { value: europe/turkey, label: Türkei }
+      - { value: europe/ukraine, label: Ukraine }
+  extraRegions:
+    type: string
+    label: Weitere Regionen
+    help: >-
+      Pfade wie auf download.geofabrik.de, kommagetrennt, z. B. „europe/spain, africa/morocco“ – für Einsätze
+      außerhalb der Liste.
+    default: ""
+    pattern: "^\\s*([a-z0-9-]+(/[a-z0-9-]+)*(\\s*,\\s*[a-z0-9-]+(/[a-z0-9-]+)*)*)?\\s*$"
+    maxLength: 500
+  refresh:
+    type: bool
+    label: Vorhandene Regionen neu laden
+    help: >-
+      Lädt beim Bauen auch bereits vorhandene Regionen neu (aktueller OSM-Stand) und baut alles neu auf – für
+      Deutschland viele Stunden. Aus: nur fehlende Regionen laden.
+    default: false
+  importStyle:
+    type: select
+    label: Umfang der Ortssuche
+    help: >-
+      „Alles“ findet auch Schulen, Feuerwehrhäuser, Firmen und andere Sonderorte. „Adressen“ braucht deutlich
+      weniger Speicher. Eine Änderung wirkt erst beim nächsten kompletten Neuaufbau.
+    default: full
+    choices:
+      - { value: full, label: Alles (Adressen und Sonderorte) }
+      - { value: address, label: Adressen (Straßen, Hausnummern, Orte) }
+  memory:
+    type: select
+    label: Arbeitsspeicher für die Kartenerzeugung
+    help: Etwa die halbe Größe der OSM-Daten, mindestens 2 GB. Deutschland gesamt braucht 8 GB oder mehr.
+    default: 4g
+    choices:
+      - { value: 2g, label: 2 GB }
+      - { value: 4g, label: 4 GB }
+      - { value: 8g, label: 8 GB }
+      - { value: 16g, label: 16 GB }
+      - { value: 32g, label: 32 GB }
+  dbMemory:
+    type: select
+    label: Arbeitsspeicher der Suchdatenbank
+    help: Etwa ein Viertel des Arbeitsspeichers des Docker-Hosts. Für Deutschland sind 16 GB RAM im Host empfehlenswert.
+    default: 2GB
+    choices:
+      - { value: 1GB, label: 1 GB (Host mit 4–8 GB RAM) }
+      - { value: 2GB, label: 2 GB (Host mit 8–16 GB RAM) }
+      - { value: 4GB, label: 4 GB (Host mit 16–32 GB RAM) }
+      - { value: 8GB, label: 8 GB (Host mit 32 GB RAM oder mehr) }
+  tilesPort:
+    type: int
+    label: Port Kartenserver
+    default: 8081
+    min: 1024
+    max: 65535
+  searchPort:
+    type: int
+    label: Port Ortssuche
+    default: 8088
+    min: 1024
+    max: 65535
+  routingPort:
+    type: int
+    label: Port Routing
+    default: 8002
+    min: 1024
+    max: 65535
+  overpassPort:
+    type: int
+    label: Port Overpass
+    default: 8089
+    min: 1024
+    max: 65535
+
+files:
+  volume: data
+  target: /addon
+  paths:
+    - scripts/regions.sh
+    - scripts/assets.sh
+    - scripts/sources.sh
+    - scripts/valhalla.sh
+    - scripts/nominatim.sh
+    - scripts/overpass.sh
+    - scripts/activate.sh
+    - styles/druck.json
+
+containers:
+  - name: tiles
+    image: maptiler/tileserver-gl:v5.6.0
+    command: ["--config", "/data/tiles/config.json"]
+    ports:
+      - container: 8080
+        host: "{{options.tilesPort}}"
+    volumes:
+      - { name: data, target: /data, readOnly: true }
+    # Ohne erzeugte Daten würden die Dienste nicht starten
+    waitForJob: build
+  - name: nominatim
+    image: mediagis/nominatim:5.3.2
+    shmSize: 1g
+    env:
+      # Nur für die Prüfung im Start-Skript – importiert wird im Job
+      PBF_PATH: /data/work/input.osm.pbf
+      UPDATE_MODE: none
+      IMPORT_STYLE: "{{options.importStyle}}"
+      POSTGRES_SHARED_BUFFERS: "{{options.dbMemory}}"
+      POSTGRES_MAINTENANCE_WORK_MEM: "{{options.dbMemory}}"
+      POSTGRES_AUTOVACUUM_WORK_MEM: "{{options.dbMemory}}"
+      POSTGRES_EFFECTIVE_CACHE_SIZE: "{{options.dbMemory}}"
+    ports:
+      - container: 8080
+        host: "{{options.searchPort}}"
+    volumes:
+      - { name: nominatim-db, target: /var/lib/postgresql/16/main }
+    waitForJob: build
+  - name: valhalla
+    image: ghcr.io/valhalla/valhalla:3.9.1
+    command: ["valhalla_service", "/data/valhalla/valhalla.json", "1"]
+    ports:
+      - container: 8002
+        host: "{{options.routingPort}}"
+    volumes:
+      - { name: data, target: /data, readOnly: true }
+    waitForJob: build
+  - name: overpass
+    image: wiktorn/overpass-api:v0.7.62.11
+    env:
+      # Datenbank kommt aus dem Job; ohne OVERPASS_DIFF_URL keine Aktualisierung
+      OVERPASS_MODE: init
+      OVERPASS_META: "no"
+      OVERPASS_MAX_TIMEOUT: 600s
+    ports:
+      - container: 80
+        host: "{{options.overpassPort}}"
+    volumes:
+      - { name: overpass, target: /db }
+    waitForJob: build
+
+jobs:
+  build:
+    label: Kartendaten bauen
+    description: >-
+      Fehlende Regionen laden, dann Karte, Routing, Ortssuche und Overpass bauen und aktivieren. Unveränderte Dienste
+      werden übersprungen; die Ortssuche ist nur während ihres Schritts nicht erreichbar.
+    runOnInstall: true
+    restartAfter: true
+    steps:
+      - label: OSM-Daten laden
+        image: debian:bookworm-slim
+        command: ["sh", "/data/addon/scripts/regions.sh"]
+        env:
+          REGIONS: "{{options.regions}}"
+          EXTRA_REGIONS: "{{options.extraRegions}}"
+          REFRESH: "{{options.refresh}}"
+        volumes:
+          - { name: data, target: /data }
+        weight: 3
+      - label: Stile und Schriften
+        image: alpine:3.20
+        command: ["sh", "/data/addon/scripts/assets.sh"]
+        volumes:
+          - { name: data, target: /data }
+        weight: 0.5
+      - label: Zusatzdaten laden
+        image: alpine:3.20
+        command: ["sh", "/data/addon/scripts/sources.sh"]
+        volumes:
+          - { name: data, target: /data }
+        weight: 1
+      - label: Kacheln erzeugen
+        image: ghcr.io/onthegomap/planetiler:0.10.2
+        # Zusatzdaten liegen schon bereit (Schritt „Zusatzdaten laden“); Planetiler lädt nichts selbst.
+        command:
+          - --osm-path=/data/work/input.osm.pbf
+          - --water-polygons-path=/data/sources/water-polygons-split-3857.zip
+          - --natural-earth-path=/data/sources/natural_earth_vector.sqlite.zip
+          - --lake-centerlines-path=/data/sources/lake_centerline.shp.zip
+          - --download=false
+          - --download-osm-tile-weights=false
+          - --tmpdir=/data/tmp
+          - --output=/data/work/osm.mbtiles
+          - --force
+        env:
+          JAVA_TOOL_OPTIONS: "-Xmx{{options.memory}}"
+        volumes:
+          - { name: data, target: /data }
+        weight: 6
+        # Planetiler meldet seine Phasen in eckigen Klammern; Prozentangaben verfeinern innerhalb der Phase.
+        progress:
+          inlinePercent: true
+          phases:
+            - { match: "\\[(lake_centerlines|wikidata)", percent: 1, label: Seenbeschriftung }
+            - { match: "\\[water_polygons", percent: 3, label: Wasserflächen }
+            - { match: "\\[natural_earth", percent: 6, label: Natural Earth }
+            - { match: "\\[osm_pass1", percent: 10, label: OSM lesen (Durchgang 1) }
+            - { match: "\\[osm_pass2", percent: 30, label: OSM verarbeiten (Durchgang 2) }
+            - { match: "\\[boundaries", percent: 68, label: Grenzen }
+            - { match: "\\[sort", percent: 72, label: Sortieren }
+            - { match: "\\[(mbtiles|archive)", percent: 78, label: Kacheln schreiben }
+      - label: Routing bauen
+        image: ghcr.io/valhalla/valhalla:3.9.1
+        command: ["sh", "/data/addon/scripts/valhalla.sh"]
+        volumes:
+          - { name: data, target: /data }
+        weight: 4
+      - label: Ortssuche importieren
+        image: mediagis/nominatim:5.3.2
+        command: ["bash", "/data/addon/scripts/nominatim.sh"]
+        shmSize: 2g
+        # Suchdienst und Import teilen sich die Datenbank
+        stopContainers: [nominatim]
+        env:
+          PBF_PATH: /data/work/input.osm.pbf
+          UPDATE_MODE: none
+          IMPORT_STYLE: "{{options.importStyle}}"
+          POSTGRES_SHARED_BUFFERS: "{{options.dbMemory}}"
+          POSTGRES_MAINTENANCE_WORK_MEM: "{{options.dbMemory}}"
+          POSTGRES_AUTOVACUUM_WORK_MEM: "{{options.dbMemory}}"
+          POSTGRES_EFFECTIVE_CACHE_SIZE: "{{options.dbMemory}}"
+        volumes:
+          - { name: nominatim-db, target: /var/lib/postgresql/16/main }
+          - { name: data, target: /data, readOnly: true }
+        weight: 12
+        # Phasen aus dem Ablauf von init.sh (bash -x) und den Meldungen von Nominatim; beim Nachladen ELVIS_PROGRESS
+        progress:
+          phases:
+            - { match: "nominatim import --osm-file", percent: 5, label: OSM-Daten importieren }
+            - { match: "[Ss]tarting indexing|[Ii]ndexing boundaries", percent: 40, label: Indizieren }
+            - { match: "[Rr]ank 26", percent: 60, label: Straßen indizieren }
+            - { match: "[Rr]ank 30", percent: 70, label: Adressen indizieren }
+            - { match: "nominatim index --threads", percent: 88, label: Nachindizieren }
+            - { match: "check-database", percent: 91, label: Datenbank prüfen }
+            - { match: "admin --warm", percent: 94, label: Zwischenspeicher füllen }
+            - { match: "ANALYZE", percent: 97, label: Statistik }
+      - label: Overpass bauen
+        image: wiktorn/overpass-api:v0.7.62.11
+        command: ["bash", "/data/addon/scripts/overpass.sh"]
+        volumes:
+          - { name: overpass, target: /db }
+          - { name: data, target: /data, readOnly: true }
+        weight: 6
+      - label: Neue Daten aktivieren
+        image: alpine:3.20
+        command: ["sh", "/data/addon/scripts/activate.sh"]
+        volumes:
+          - { name: data, target: /data }
+          - { name: overpass, target: /db }
+        weight: 0.2
+
+provides:
+  mapSources:
+    - id: standard
+      name: Lokale Karte
+      url: "http://{{host.address}}:{{options.tilesPort}}/styles/standard/{z}/{x}/{y}{r}.png"
+      attribution: © OpenMapTiles © OpenStreetMap-Mitwirkende
+      maxZoom: 19
+      pixelRatio: 2
+      variant: light
+    - id: dunkel
+      name: Lokale Karte (dunkel)
+      url: "http://{{host.address}}:{{options.tilesPort}}/styles/dunkel/{z}/{x}/{y}{r}.png"
+      attribution: © OpenMapTiles © OpenStreetMap-Mitwirkende
+      maxZoom: 19
+      pixelRatio: 2
+      variant: dark
+    - id: druck
+      name: Lokale Karte (Druck, schwarz-weiß)
+      url: "http://{{host.address}}:{{options.tilesPort}}/styles/druck/{z}/{x}/{y}{r}.png"
+      attribution: © OpenMapTiles © OpenStreetMap-Mitwirkende
+      maxZoom: 19
+      pixelRatio: 2
+      variant: print
+  geocoders:
+    - id: nominatim
+      name: Ortssuche (lokal)
+      type: nominatim
+      url: "http://{{host.address}}:{{options.searchPort}}"
+  routers:
+    - id: valhalla
+      name: Routing (lokal)
+      type: valhalla
+      url: "http://{{host.address}}:{{options.routingPort}}"
+  overpass:
+    - id: overpass
+      name: Overpass (lokal)
+      url: "http://{{host.address}}:{{options.overpassPort}}"

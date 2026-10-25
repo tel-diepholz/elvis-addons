@@ -2,7 +2,7 @@
 # Stile (OSM Bright, Dark Matter, ELVIS Druck), Sprites und Schriften für tileserver-gl bereitstellen.
 set -eu
 progress() { echo "ELVIS_PROGRESS $1 $2"; }
-D=/data
+D=/data/tiles
 
 progress 2 "Werkzeuge installieren"
 apk add --no-cache curl jq unzip >/dev/null
@@ -36,7 +36,7 @@ local_style dunkel dark-matter-gl-style 75
 
 progress 90 "Druckstil übernehmen"
 mkdir -p "$D/styles/druck"
-cp "$D/addon/styles/druck.json" "$D/styles/druck/style.json"
+cp /data/addon/styles/druck.json "$D/styles/druck/style.json"
 
 # Einfache Anführungszeichen im HTML, damit das JSON unten gültig bleibt
 ATTR="<a href='https://openmaptiles.org/'>© OpenMapTiles</a> <a href='https://www.openstreetmap.org/copyright'>© OpenStreetMap-Mitwirkende</a>"
