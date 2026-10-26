@@ -7,7 +7,7 @@
 # (z. B. Auslandseinsatz), lädt der Job nur diese und importiert sie in die Ortssuche nach.
 id: osm-daten
 name: OSM-Daten
-version: 1.0.0
+version: 1.0.1
 description: >-
   Karte, Ortssuche, Routing und Overpass ohne Internet – alles aus denselben OpenStreetMap-Auszügen von Geofabrik.
   Regionen lassen sich jederzeit ergänzen (Konfiguration ändern, dann „Kartendaten bauen“). Speicher grob 35× der
@@ -180,6 +180,9 @@ containers:
     waitForJob: build
   - name: overpass
     image: wiktorn/overpass-api:v0.7.62.11
+    # /db ist das Home von „overpass“ und kommt per adduser (Debian 12) mit 0700 ins Volume; nginx (Abfragen) muss
+    # aber zum Socket des Dispatchers in /db/db, sonst scheitert jede Abfrage mit „Permission denied“
+    command: ["bash", "-c", "chmod 755 /db && exec /app/docker-entrypoint.sh"]
     env:
       # Datenbank kommt aus dem Job; ohne OVERPASS_DIFF_URL keine Aktualisierung
       OVERPASS_MODE: init

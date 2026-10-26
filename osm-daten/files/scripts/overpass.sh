@@ -8,6 +8,8 @@ progress() { echo "ELVIS_PROGRESS $1 $2" >&3; }
 
 W=/data/work
 N=/db/next
+# Home von „overpass“ im Image (0700); die Abfragen laufen als nginx und brauchen Zugang zum Socket in /db/db
+chmod 755 /db
 if cmp -s "$W/stamp" /db/stamp 2>/dev/null; then
   echo "Regionen unverändert – vorhandene Overpass-Datenbank bleibt."
   progress 100 "Overpass aktuell"
@@ -15,6 +17,7 @@ if cmp -s "$W/stamp" /db/stamp 2>/dev/null; then
 fi
 rm -rf "$N"
 mkdir -p "$N/db"
+chmod 755 "$N" "$N/db"
 
 progress 1 "Datenstand ermitteln"
 version=$(osmium fileinfo -e -g data.timestamp.last "$W/input.osm.pbf")
