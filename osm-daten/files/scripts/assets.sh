@@ -2,10 +2,22 @@
 # Stile (OSM Bright, ELVIS Dunkel, ELVIS Druck), Sprites und Schriften für tileserver-gl bereitstellen.
 set -eu
 progress() { echo "ELVIS_PROGRESS $1 $2"; }
+# Pakete mit Ausweichspiegeln: dl-cdn.alpinelinux.org (Fastly) ist hinter manchen Firewalls/Proxys gesperrt oder
+# zeitweise nicht erreichbar (apk meldet dann „Permission denied“). Pakete sind signiert, daher geht auch http.
+apk_add() {
+  for repo in https://dl-cdn.alpinelinux.org https://ftp.halifax.rwth-aachen.de http://dl-cdn.alpinelinux.org; do
+    sed -i "s#^https\?://[^/]*#$repo#" /etc/apk/repositories
+    apk add --no-cache "$@" >/dev/null 2>/tmp/apk.err && return 0
+    echo "Paketquelle $repo nicht erreichbar – versuche die nächste"
+  done
+  cat /tmp/apk.err
+  echo "FEHLER: Alpine-Paketquellen nicht erreichbar. Internetzugang des Docker-Hosts prüfen (Firewall/Proxy, DNS)."
+  exit 1
+}
 D=/data/tiles
 
 progress 2 "Werkzeuge installieren"
-apk add --no-cache curl jq unzip >/dev/null
+apk_add curl jq unzip
 mkdir -p "$D/styles" "$D/fonts"
 
 # Schriften (OpenMapTiles fonts v2.0, Noto Sans + Metropolis) – nur einmal laden

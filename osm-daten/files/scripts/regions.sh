@@ -20,7 +20,7 @@ rm -rf /data/tmp
 free_mb() { df -Pm "$1" | awk 'NR==2 {print $4}'; }
 file_of() { echo "$O/$(echo "$1" | tr '/' '_').osm.pbf"; }
 url_of() { echo "https://download.geofabrik.de/$1-latest.osm.pbf"; }
-remote_size() { curl -fsSIL --retry 3 "$(url_of "$1")" | tr -d '\r' | awk 'tolower($1)=="content-length:"{print $2}' | tail -n1; }
+remote_size() { curl -fsSIL --connect-timeout 30 --retry 3 "$(url_of "$1")" | tr -d '\r' | awk 'tolower($1)=="content-length:"{print $2}' | tail -n1; }
 
 # Vor apt prüfen: Bei vollem Speicher meldet apt sonst irreführend „invalid signature“
 for fs in / /data; do
@@ -92,7 +92,7 @@ for r in $fetch; do
   size=$(remote_size "$r")
   size=${size:-0}
   echo "Lade $r ($((size / 1048576)) MB) von $url"
-  curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors -o "$f.part" "$url" &
+  curl -fsSL --connect-timeout 30 --retry 5 --retry-delay 10 --retry-all-errors -o "$f.part" "$url" &
   pid=$!
   # Fortschritt aus der Dateigröße: Download ist 2–85 % dieses Schritts
   while kill -0 "$pid" 2>/dev/null; do
