@@ -1,0 +1,21 @@
+{
+  "hinweis": "Quellen der Landesvermessungsverwaltungen für digitale Orthophotos (DOP). Die Dienste ändern ihre Adressen gelegentlich – 'feed' ist ein Verzeichnis-Index mit Direktlinks auf GeoTIFF/JP2-Dateien oder eine Liste direkter Datei-Links (auch ZIP); 'srs' wird Bildern ohne eingebettetes Koordinatensystem (JPG + Weltdatei) zugewiesen (leer = nur Portal bekannt; Index-Adresse dann in der Addon-Option 'feedOverride' angeben). Bitte vor produktiver Nutzung prüfen.",
+  "states": [
+    { "id": "bw", "name": "Baden-Württemberg", "agency": "LGL Baden-Württemberg", "portal": "https://www.lgl-bw.de/Produkte/Luftbilder/Digitale-Orthophotos/", "license": "dl-de/by-2-0", "resolution": "20 cm", "feed": "" },
+    { "id": "by", "name": "Bayern", "agency": "LDBV Bayern", "portal": "https://geodaten.bayern.de/opengeodata/OpenDataDetail.html?pn=dop40", "license": "CC BY 4.0", "resolution": "40 cm", "feed": "" },
+    { "id": "be", "name": "Berlin", "agency": "SenStadt / Geoportal Berlin", "portal": "https://fbinter.stadt-berlin.de/fb/index.jsp", "license": "dl-de/zero-2-0", "resolution": "20 cm", "feed": "" },
+    { "id": "bb", "name": "Brandenburg", "agency": "LGB Brandenburg", "portal": "https://geobasis-bb.de/geodaten/", "license": "dl-de/by-2-0", "resolution": "20 cm", "feed": "https://data.geobasis-bb.de/geobasis/daten/dop/rgbi_tif/" },
+    { "id": "hb", "name": "Bremen", "agency": "Landesamt GeoInformation Bremen", "portal": "https://www.geo.bremen.de/produkte/luftbildprodukte-11703", "license": "CC BY 4.0", "resolution": "10 cm", "srs": "EPSG:25832", "feed": ["https://gdi2.geo.bremen.de/inspire/download/DOP/data/DOP10_RGB_JPG_HB.zip", "https://gdi2.geo.bremen.de/inspire/download/DOP/data/DOP10_RGB_JPG_BHV.zip"] },
+    { "id": "hh", "name": "Hamburg", "agency": "LGV Hamburg", "portal": "https://metaver.de/", "license": "dl-de/by-2-0", "resolution": "20 cm", "feed": "" },
+    { "id": "he", "name": "Hessen", "agency": "HVBG Hessen", "portal": "https://gds.hessen.de/", "license": "dl-de/zero-2-0", "resolution": "20 cm", "feed": "" },
+    { "id": "mv", "name": "Mecklenburg-Vorpommern", "agency": "LAiV M-V", "portal": "https://www.geodaten-mv.de/", "license": "CC BY 4.0", "resolution": "20 cm", "feed": "" },
+    { "id": "ni", "name": "Niedersachsen", "agency": "LGLN Niedersachsen", "portal": "https://ni-lgln-opengeodata.hub.arcgis.com/", "license": "CC BY 4.0", "resolution": "20 cm", "feed": "" },
+    { "id": "nw", "name": "Nordrhein-Westfalen", "agency": "Geobasis NRW", "portal": "https://www.opengeodata.nrw.de/produkte/geobasis/lusat/", "license": "dl-de/zero-2-0", "resolution": "10 cm", "feed": "https://www.opengeodata.nrw.de/produkte/geobasis/lusat/akt/dop/dop_jp2_f10/" },
+    { "id": "rp", "name": "Rheinland-Pfalz", "agency": "LVermGeo RLP", "portal": "https://lvermgeo.rlp.de/", "license": "dl-de/by-2-0", "resolution": "20 cm", "feed": "" },
+    { "id": "sl", "name": "Saarland", "agency": "LVGL Saarland", "portal": "https://geoportal.saarland.de/", "license": "dl-de/by-2-0", "resolution": "20 cm", "feed": "" },
+    { "id": "sn", "name": "Sachsen", "agency": "GeoSN Sachsen", "portal": "https://www.geodaten.sachsen.de/", "license": "dl-de/by-2-0", "resolution": "20 cm", "feed": "" },
+    { "id": "st", "name": "Sachsen-Anhalt", "agency": "LVermGeo Sachsen-Anhalt", "portal": "https://www.lvermgeo.sachsen-anhalt.de/", "license": "dl-de/by-2-0", "resolution": "20 cm", "feed": "" },
+    { "id": "sh", "name": "Schleswig-Holstein", "agency": "LVermGeo SH", "portal": "https://opendata.schleswig-holstein.de/", "license": "dl-de/by-2-0", "resolution": "20 cm", "feed": "" },
+    { "id": "th", "name": "Thüringen", "agency": "TLBG Thüringen", "portal": "https://www.geoportal-th.de/", "license": "dl-de/by-2-0", "resolution": "20 cm", "feed": "" }
+  ]
+}
