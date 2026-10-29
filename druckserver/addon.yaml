@@ -2,7 +2,7 @@
 # die Arbeitsplätze unter „Drucken“ hochladen – auch ohne Anmeldung.
 id: druckserver
 name: Druckserver (CUPS)
-version: 1.1.0
+version: 1.2.0
 description: >-
   Drucker im Fahrzeug-LAN oder per USB über CUPS ansteuern. In ELVIS können alle Arbeitsplätze unter „Drucken“ PDFs
   mit gängigen Einstellungen (Kopien, beidseitig, Papier, Farbe, Seiten) ausgeben; auf Wunsch legt ELVIS jeden Druck
@@ -22,8 +22,9 @@ options:
     type: string
     label: Drucker
     help: >-
-      Optional, kommagetrennt „Name=Adresse“, z. B. „Laser_ELW=ipp://192.168.1.50/ipp/print, Plotter=socket://192.168.1.51:9100“.
-      Fehlende Drucker richtet das Addon beim Start als IPP-Everywhere-Drucker (ohne Treiber) ein; bestehende bleiben unverändert.
+      Optional, kommagetrennt „Name=Adresse“, z. B. „Laser=ipp://192.168.1.50/ipp/print, Plotter=socket://192.168.1.51:9100“.
+      Fehlende Drucker legt das Addon als IPP-Everywhere-Drucker an. Vorgaben mit „;“ anhängen, z. B.
+      „;cupsFinishingTemplate=trim-after-sheets“ (Plotter schneidet nach jedem Blatt).
     default: ""
     maxLength: 1000
   usb:

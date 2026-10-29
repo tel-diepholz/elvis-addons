@@ -26,19 +26,37 @@ for _ in $(seq 1 30); do
   sleep 1
 done
 
-# Drucker „Name=Adresse, …“ einrichten, sofern es sie noch nicht gibt
+# Drucker „Name=Adresse[;Option=Wert…], …“ einrichten, sofern es sie noch nicht gibt.
+# Die Optionen setzt das Addon bei jedem Start als Vorgabe der Warteschlange, auch bei bestehenden Druckern.
 echo "${PRINTERS:-}" | tr ',' '\n' | while IFS= read -r entry; do
   entry=$(echo "$entry" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
   [ -n "$entry" ] || continue
   case "$entry" in *=*) ;; *) echo "Drucker „$entry“: Format Name=Adresse erwartet" >&2; continue ;; esac
-  name=$(echo "${entry%%=*}" | sed 's/[[:space:]]*$//' | tr -c 'A-Za-z0-9_-' '_' | cut -c1-127)
-  uri=$(echo "${entry#*=}" | sed 's/^[[:space:]]*//')
-  if lpstat -p "$name" >/dev/null 2>&1; then continue; fi
-  if lpadmin -p "$name" -E -v "$uri" -m everywhere -D "$name"; then
-    echo "Drucker $name ($uri) eingerichtet"
-  else
-    echo "Drucker $name ($uri) konnte nicht eingerichtet werden – eingeschaltet, erreichbar und IPP-Everywhere-fähig? Sonst in der CUPS-Verwaltung mit Treiber anlegen. Neuer Versuch beim nächsten Start." >&2
+  name=$(printf '%s' "${entry%%=*}" | sed 's/[[:space:]]*$//' | tr -c 'A-Za-z0-9_-' '_' | cut -c1-127)
+  rest=${entry#*=}
+  uri=$(echo "${rest%%;*}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+  case "$rest" in *\;*) options=${rest#*;} ;; *) options= ;; esac
+  if ! lpstat -p "$name" >/dev/null 2>&1; then
+    if lpadmin -p "$name" -E -v "$uri" -m everywhere -D "$name"; then
+      echo "Drucker $name ($uri) eingerichtet"
+    else
+      echo "Drucker $name ($uri) konnte nicht eingerichtet werden – eingeschaltet, erreichbar und IPP-Everywhere-fähig? Sonst in der CUPS-Verwaltung mit Treiber anlegen. Neuer Versuch beim nächsten Start." >&2
+      continue
+    fi
   fi
+  echo "$options" | tr ';' '\n' | while IFS= read -r option; do
+    option=$(echo "$option" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//; s/[[:space:]]*=[[:space:]]*/=/')
+    [ -n "$option" ] || continue
+    if ! echo "$option" | grep -Eq '^[A-Za-z0-9_-]+=[^[:space:]]+$'; then
+      echo "Drucker $name: Option „$option“ ignoriert – Format Option=Wert erwartet" >&2
+      continue
+    fi
+    if lpadmin -p "$name" -o "$option"; then
+      echo "Drucker $name: $option gesetzt"
+    else
+      echo "Drucker $name: Option „$option“ konnte nicht gesetzt werden – Name und Werte zeigt „lpoptions -p $name -l“" >&2
+    fi
+  done
 done
 
 wait "$pid"
