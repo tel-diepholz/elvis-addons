@@ -32,13 +32,8 @@ done
 
 progress 1 "Werkzeuge installieren"
 # osmium-tool gibt es nicht für Alpine, daher läuft dieser Schritt auf Debian
-export DEBIAN_FRONTEND=noninteractive
-if ! apt-get update -qq >/dev/null 2>/tmp/apt.err || grep -q '^E:' /tmp/apt.err; then
-  cat /tmp/apt.err
-  echo "FEHLER: Paketquellen nicht lesbar. Häufigste Ursache bei 'invalid signature': voller Speicher auf dem Docker-Host (df -h, docker system df) – sonst falsche Uhrzeit des Hosts oder ein Proxy, der die Antworten verändert."
-  exit 1
-fi
-apt-get install -y -qq --no-install-recommends curl ca-certificates osmium-tool >/dev/null
+. /data/addon/scripts/tools.sh
+install_debian_tools
 
 # Gewünschte Regionen: Auswahl und freie Eingabe, ohne Doppelte
 regions=$(echo "${REGIONS:-},${EXTRA_REGIONS:-}" | tr ', ' '\n\n' | sed '/^$/d' | awk '!seen[$0]++')
