@@ -1,90 +1,41 @@
 id: orthophotos
-name: Luftbilder (Orthophotos der Länder)
-version: 1.1.0
-description: Lädt digitale Orthophotos der gewählten Bundesländer, erzeugt daraus lokale XYZ-Kacheln und stellt sie in ELVIS als Kartenstil „Luftbild“ bereit.
+name: Luftbilder (Orthophotos)
+version: 2.0.0
+description: Zeigt die Abdeckung der digitalen Orthophotos auf einer Karte. Einzelne Luftbilder lassen sich auswählen, werden geladen, in lokale XYZ-Kacheln umgewandelt und erscheinen in ELVIS im Kartenstil „Luftbild (lokal)“. Vorerst Niedersachsen (LGLN, DOP20).
 arch: [amd64, arm64]
 options:
-  states:
-    type: multiselect
-    label: Bundesländer
-    required: true
-    help: Quellen siehe catalog.json. Luftbilder sind groß – nur das Einsatzgebiet wählen.
-    choices:
-      - { value: bw, label: Baden-Württemberg }
-      - { value: by, label: Bayern }
-      - { value: be, label: Berlin }
-      - { value: bb, label: Brandenburg }
-      - { value: hb, label: Bremen }
-      - { value: hh, label: Hamburg }
-      - { value: he, label: Hessen }
-      - { value: mv, label: Mecklenburg-Vorpommern }
-      - { value: ni, label: Niedersachsen }
-      - { value: nw, label: Nordrhein-Westfalen }
-      - { value: rp, label: Rheinland-Pfalz }
-      - { value: sl, label: Saarland }
-      - { value: sn, label: Sachsen }
-      - { value: st, label: Sachsen-Anhalt }
-      - { value: sh, label: Schleswig-Holstein }
-      - { value: th, label: Thüringen }
-    default: []
-  feedOverride:
-    type: string
-    label: Eigene Index-Adressen
-    help: 'Format „nw=https://…/,bb=https://…/“ – Verzeichnis mit GeoTIFF/JP2-Links oder direkte Datei-Links (auch ZIP, mehrere mit Leerzeichen); ersetzt den Katalog.'
-    default: ''
-  filter:
-    type: string
-    label: Dateifilter (Regex)
-    help: Nur Dateien laden, deren Name (ohne Endung) passt – gilt auch für ZIP-Pakete und deren Inhalt. Leer = alle.
-    default: ''
-  maxFiles:
-    type: int
-    label: Höchstzahl Dateien je Bundesland
-    help: 0 = unbegrenzt. Zum Testen klein wählen.
-    default: 0
-    min: 0
-  minZoom: { type: int, label: Kleinste Zoomstufe, default: 10, min: 5, max: 18 }
-  maxZoom: { type: int, label: Größte Zoomstufe, default: 19, min: 12, max: 20, help: "Jede Stufe vervierfacht den Speicherbedarf." }
+  minZoom: { type: int, label: Kleinste Zoomstufe, default: 12, min: 8, max: 18, help: Darunter bleibt der Kartenstil leer. Kleine Werte machen das Zusammensetzen der Kacheln langsamer. }
+  maxZoom: { type: int, label: Größte Zoomstufe, default: 19, min: 14, max: 20, help: "DOP20 (20 cm) entspricht etwa Stufe 19. Jede Stufe vervierfacht den Speicherbedarf." }
+  processes: { type: int, label: Prozesse beim Umwandeln, default: 2, min: 1, max: 16 }
   port: { type: int, label: Port auf dem Host, default: 8091, min: 1024, max: 65535 }
 containers:
-  - name: tiles
-    image: nginx:1.27-alpine
-    ports: [{ container: 80, host: "{{options.port}}" }]
-    volumes: [{ name: data, target: /usr/share/nginx/html, readOnly: true }]
-    waitForJob: build
+  - name: server
+    image: ghcr.io/osgeo/gdal:ubuntu-small-3.9.2
+    command: [python3, /data/addon/server/app.py]
+    env:
+      MIN_ZOOM: "{{options.minZoom}}"
+      MAX_ZOOM: "{{options.maxZoom}}"
+      PROCESSES: "{{options.processes}}"
+    ports: [{ container: 8080, host: "{{options.port}}" }]
+    volumes: [{ name: data, target: /data }]
 files:
   volume: data
   target: /addon
-  paths: [catalog.json, scripts/fetch.py, scripts/tile.sh, scripts/merge.py]
-jobs:
-  build:
-    label: Luftbilder laden und Kacheln erzeugen
-    description: Lädt die Orthophotos der gewählten Länder und erzeugt lokale XYZ-Kacheln. Dauer und Speicherbedarf hängen stark vom Gebiet ab.
-    runOnInstall: true
-    restartAfter: true
-    steps:
-      - label: Orthophotos herunterladen
-        image: python:3.12-alpine
-        command: [python3, /data/addon/scripts/fetch.py]
-        env:
-          STATES: "{{options.states}}"
-          FEED_OVERRIDE: "{{options.feedOverride}}"
-          FILTER: "{{options.filter}}"
-          MAX_FILES: "{{options.maxFiles}}"
-        volumes: [{ name: data, target: /data }]
-        weight: 6
-      - label: Kacheln erzeugen
-        image: ghcr.io/osgeo/gdal:ubuntu-small-3.9.2
-        command: [sh, /data/addon/scripts/tile.sh]
-        env:
-          MIN_ZOOM: "{{options.minZoom}}"
-          MAX_ZOOM: "{{options.maxZoom}}"
-        volumes: [{ name: data, target: /data }]
-        weight: 4
+  paths:
+    - server/app.py
+    - server/sources.py
+    - ui/index.html
+    - ui/app.js
+    - ui/style.css
+    - ui/leaflet/leaflet.js
+    - ui/leaflet/leaflet.css
 provides:
   mapSources:
     - id: luftbild
       name: Luftbild (lokal)
       url: "http://{{host.address}}:{{options.port}}/tiles/{z}/{x}/{y}.png"
-      attribution: "Orthophotos: Vermessungsverwaltungen der Länder (Open Data, Lizenz je Land)"
-      maxZoom: 19
+      attribution: "Orthophotos: © LGLN (CC BY 4.0)"
+      maxZoom: 20
+  ui:
+    name: Luftbilder auswählen
+    url: "http://{{host.address}}:{{options.port}}/"
