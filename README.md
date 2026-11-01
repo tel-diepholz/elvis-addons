@@ -10,6 +10,7 @@ InformationsSystem. ELVIS installiert sie als Docker-Container auf den Servern i
 | [`druckserver`](druckserver/addon.yaml) | Drucker im Fahrzeug über CUPS (LAN oder USB), optional Gastdrucker im Gastnetz für iPhone (AirPrint), Android und Windows ohne App |
 | [`arbeitsplatz`](arbeitsplatz/addon.yaml) | Notebooks per PXE als ELVIS-Arbeitsplatz installieren (Ubuntu, KDE Plasma im Windows-11-Stil), Anmeldung mit ELVIS-Benutzern und PIN, Profil je Einsatz, keine Updates |
 | [`ndi-gateway`](ndi-gateway/addon.yaml) | NDI-Quellen im Browser: GStreamer → H.264 → MediaMTX → WebRTC, Encoder CPU/VA-API/NVENC |
+| [`signal-cli`](signal-cli/addon.yaml) | Signal-Nachrichten in ELVIS: signal-cli im Daemon-Modus, Schnittstelle mit Token gesichert; das Modul „Signal“ findet den Dienst von selbst |
 | [`hello`](hello/addon.yaml) | Kleines Beispiel zum Ausprobieren der Addon-Verwaltung |
 
 ## Einbindung in ELVIS
@@ -29,6 +30,7 @@ InformationsSystem. ELVIS installiert sie als Docker-Container auf den Servern i
 ```
 repository.yaml          Name und Liste der Addon-Verzeichnisse
 <addon>/addon.yaml       Manifest: Optionen (daraus entsteht das Formular), Container, Jobs, provides, builds
+<addon>/README.md        Anleitung für Admins (im Manifest als docs: README.md), ELVIS zeigt sie im Store
 <addon>/files/…          Dateien, die ins Volume kopiert oder als Build-Kontext genutzt werden
 ```
 

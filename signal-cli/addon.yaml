@@ -1,0 +1,57 @@
+# Signal für ELVIS: signal-cli im Daemon-Modus (JSON-RPC über HTTP). signal-cli selbst lauscht nur im Container auf
+# 127.0.0.1 – davor prüft nginx das Token ({{addon.secret}}), denn die Schnittstelle von signal-cli hat keine Anmeldung.
+# ELVIS bekommt Adresse und Token über provides.messengers und nutzt sie im Modul „Signal“ (Treiber signal-cli).
+id: signal-cli
+name: Signal (signal-cli)
+version: 1.0.4
+description: >-
+  Signal-Nachrichten in ELVIS: signal-cli als Dienst mit gesicherter Schnittstelle. Wie das Modul Signal eingeschaltet
+  und die Rufnummer hinterlegt wird, steht in der Anleitung.
+icon: message-circle
+url: https://github.com/AsamK/signal-cli
+docs: README.md
+# signal-cli gibt es als native Fassung nur für x86_64
+arch: [amd64]
+
+options:
+  port:
+    type: int
+    label: Port auf dem Host
+    help: Unter diesem Port erreicht ELVIS die (mit Token gesicherte) Schnittstelle.
+    default: 8087
+    min: 1024
+    max: 65535
+
+# target ist ein Pfad im Volume: die Datei liegt im Container unter /data/addon/…
+files:
+  volume: addon
+  target: /addon
+  paths:
+    - nginx.conf.template
+
+builds:
+  signal-cli:
+    context: docker
+    files: [Dockerfile, entrypoint.sh]
+    label: einmalig, ca. 1–3 Minuten (lädt signal-cli, rund 120 MB)
+
+containers:
+  - name: daemon
+    image: build:signal-cli
+    env:
+      ELVIS_TOKEN: "{{addon.secret}}"
+    volumes:
+      - { name: addon, target: /data, readOnly: true }
+      # Konto, Schlüssel und Verlauf von signal-cli – bleibt bei Updates erhalten, gehört ins Backup des Docker-Hosts
+      - { name: data, target: /var/lib/signal-cli }
+    ports:
+      - container: 8080
+        host: "{{options.port}}"
+
+provides:
+  messengers:
+    - id: signal
+      name: signal-cli
+      kind: signal-cli
+      url: "http://{{host.address}}:{{options.port}}"
+      token: "{{addon.secret}}"
