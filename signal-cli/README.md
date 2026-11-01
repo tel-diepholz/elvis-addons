@@ -6,8 +6,8 @@ einem Docker-Host. ELVIS findet den Dienst von selbst.
 
 ## Voraussetzungen
 
-- Ein Docker-Host mit **x86_64 (amd64)**. signal-cli gibt es als native Fassung nur dafür.
-- Internetzugang des Docker-Hosts: einmal beim Installieren (GitHub, rund 120 MB), danach dauerhaft zu den
+- Ein Docker-Host mit **x86_64 (amd64)**. signal-cli bringt seine Signal-Bibliothek nur dafür mit.
+- Internetzugang des Docker-Hosts: einmal beim Installieren (Java-Laufzeit und signal-cli, rund 250 MB), danach dauerhaft zu den
   Signal-Servern.
 - Eine **Rufnummer** für Signal. Dafür gibt es zwei Wege (siehe unten):
   - eine Nummer, die schon in der Signal-App eines Handys läuft (ELVIS wird verknüpftes Gerät),
@@ -16,7 +16,7 @@ einem Docker-Host. ELVIS findet den Dienst von selbst.
 ## 1. Addon installieren
 
 1. **Installieren** drücken, Docker-Host wählen. Der Port (Vorgabe 8087) muss auf dem Host frei sein.
-2. Beim ersten Mal baut ELVIS das Image (ein bis drei Minuten). Danach steht das Addon auf „läuft“.
+2. Beim ersten Mal baut ELVIS das Image (zwei bis vier Minuten). Danach steht das Addon auf „läuft“.
 
 ## 2. Modul Signal einschalten
 
