@@ -8,3 +8,4 @@ addons:
   - druckserver
   - arbeitsplatz
   - orthophotos
+  - signal-cli
