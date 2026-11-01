@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Luftbilder auswählen</title>
+  <link rel="stylesheet" href="leaflet/leaflet.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="bar">
+    <div class="bar-group">
+      <strong>Luftbilder</strong>
+      <span id="index" class="muted">Index wird geprüft …</span>
+      <button id="refresh" class="btn btn-sm" title="Kachelindex der Länder neu laden">Index neu laden</button>
+    </div>
+    <div class="bar-group">
+      <span id="counts" class="muted"></span>
+      <span id="storage" class="muted"></span>
+      <button id="outdated" class="btn btn-sm" hidden>Neuere Fassungen laden</button>
+      <button id="retry" class="btn btn-sm" hidden>Fehler wiederholen</button>
+      <button id="legacy" class="btn btn-sm btn-danger" hidden></button>
+    </div>
+  </header>
+  <div id="current" class="progress" hidden>
+    <div class="progress-text"></div>
+    <div class="progress-track"><div class="progress-fill"></div></div>
+  </div>
+  <main>
+    <div id="map"></div>
+    <div class="map-tools">
+      <label>Grundkarte <select id="base"></select></label>
+      <label class="check"><input type="checkbox" id="overlay" checked> Umgewandelte Luftbilder zeigen</label>
+    </div>
+    <div class="legend">
+      <span><i class="sw sw-none"></i>verfügbar</span>
+      <span><i class="sw sw-add"></i>neu gewählt</span>
+      <span><i class="sw sw-busy"></i>in Arbeit</span>
+      <span><i class="sw sw-ready"></i>umgewandelt</span>
+      <span><i class="sw sw-outdated"></i>neuere Fassung</span>
+      <span><i class="sw sw-error"></i>Fehler</span>
+      <span><i class="sw sw-remove"></i>wird gelöscht</span>
+    </div>
+    <div id="hint" class="hint"></div>
+  </main>
+  <footer id="actions" class="actions" hidden>
+    <span id="pending"></span>
+    <button id="discard" class="btn">Verwerfen</button>
+    <button id="apply" class="btn btn-primary">Übernehmen</button>
+  </footer>
+  <script src="leaflet/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
