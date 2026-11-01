@@ -10,6 +10,7 @@ InformationsSystem. ELVIS installiert sie als Docker-Container auf den Servern i
 | [`druckserver`](druckserver/addon.yaml) | Drucker im Fahrzeug über CUPS (LAN oder USB), optional Gastdrucker im Gastnetz für iPhone (AirPrint), Android und Windows ohne App |
 | [`arbeitsplatz`](arbeitsplatz/addon.yaml) | Notebooks per PXE als ELVIS-Arbeitsplatz installieren (Ubuntu, KDE Plasma im Windows-11-Stil), Anmeldung mit ELVIS-Benutzern und PIN, Profil je Einsatz, keine Updates |
 | [`ndi-gateway`](ndi-gateway/addon.yaml) | NDI-Quellen im Browser: GStreamer → H.264 → MediaMTX → WebRTC, Encoder CPU/VA-API/NVENC |
+| [`orthophotos`](orthophotos/README.md) | Luftbilder (Orthophotos): Abdeckung auf einer Karte, einzelne Luftbilder auswählen und in lokale XYZ-Kacheln umwandeln (Kartenstil „Luftbild (lokal)“), vorerst Niedersachsen (LGLN DOP20) |
 | [`signal-cli`](signal-cli/addon.yaml) | Signal-Nachrichten in ELVIS: signal-cli im Daemon-Modus, Schnittstelle mit Token gesichert; das Modul „Signal“ findet den Dienst von selbst |
 | [`hello`](hello/addon.yaml) | Kleines Beispiel zum Ausprobieren der Addon-Verwaltung |
 
