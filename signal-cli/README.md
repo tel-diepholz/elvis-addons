@@ -59,6 +59,15 @@ nutzen.**
    schon mit Registrierungssperre bei Signal registriert war.
 5. In der Karte steht „verbunden“ und die Nummer.
 
+### Profilname (nur Weg B)
+
+Eine neu registrierte Nummer hat noch kein Signal-Profil, Empfänger sehen den Absender dann als **„Unbekannt“**. In den
+Moduleinstellungen unter **Profilname** (z. B. „ELW 1 Diepholz“) und optional **Profil-Info** eintragen und
+**Übernehmen**. ELVIS setzt das Profil beim Verbinden über signal-cli. Empfänger sehen den Namen ab der nächsten
+Nachricht von ELVIS.
+
+Bei Weg A das Feld leer lassen: Das Profil gehört dort dem Handy, ELVIS würde dessen Namen überschreiben.
+
 ## 4. Ausprobieren
 
 - Unter **Nachrichten → Neue Nachricht** eine Mobilnummer eintragen und als Kanal **Signal** wählen.
