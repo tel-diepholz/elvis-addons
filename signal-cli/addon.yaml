@@ -3,14 +3,14 @@
 # ELVIS bekommt Adresse und Token über provides.messengers und nutzt sie im Modul „Signal“ (Treiber signal-cli).
 id: signal-cli
 name: Signal (signal-cli)
-version: 1.0.4
+version: 1.0.5
 description: >-
   Signal-Nachrichten in ELVIS: signal-cli als Dienst mit gesicherter Schnittstelle. Wie das Modul Signal eingeschaltet
   und die Rufnummer hinterlegt wird, steht in der Anleitung.
 icon: message-circle
 url: https://github.com/AsamK/signal-cli
 docs: README.md
-# signal-cli gibt es als native Fassung nur für x86_64
+# signal-cli bringt seine native Bibliothek (libsignal) nur für x86_64 mit
 arch: [amd64]
 
 options:
@@ -33,7 +33,7 @@ builds:
   signal-cli:
     context: docker
     files: [Dockerfile, entrypoint.sh]
-    label: einmalig, ca. 1–3 Minuten (lädt signal-cli, rund 120 MB)
+    label: einmalig, ca. 2–4 Minuten (lädt Java 25 und signal-cli, zusammen rund 250 MB)
 
 containers:
   - name: daemon
