@@ -1,0 +1,172 @@
+# Bildschirmübertragung: Empfänger für AirPlay (iPhone, iPad, Mac) und Bildschirmfreigabe im Browser (Windows, macOS,
+# Linux). Die Bilder landen ohne Umkodieren in MediaMTX und erscheinen per WebRTC als Kachel „Video“.
+id: screencast
+name: Bildschirmübertragung
+version: 1.1.0
+description: >-
+  Empfänger für Bildschirmübertragungen ohne zusätzliche Software: iPhone, iPad und Mac senden per AirPlay
+  (Bildschirmsynchronisierung), Windows-, macOS- und Linux-Rechner geben ihren Bildschirm im Browser frei (Edge, Chrome,
+  Firefox). Das Bild erscheint mit geringer Verzögerung als Kachel „Video“ auf Bildschirmen und in der Übersicht.
+icon: cast
+url: https://github.com/FDH2/UxPlay
+arch: [amd64, arm64]
+docs: README.md
+
+options:
+  receivers:
+    type: string
+    label: Empfänger
+    help: >-
+      Kommagetrennte Namen, z. B. „Leinwand, Besprechung“. Jeder Name ist ein eigener AirPlay-Empfänger und ein eigenes
+      Ziel der Browser-Freigabe – auf einer Kachel „Video“ wählt ihr den Empfänger als Quelle.
+    default: Leinwand
+  airplay:
+    type: bool
+    label: AirPlay (iPhone, iPad, Mac)
+    help: Braucht mDNS im selben Netz wie die Geräte (kein Routing dazwischen).
+    default: true
+  browserShare:
+    type: bool
+    label: Bildschirmfreigabe im Browser (Windows, macOS, Linux)
+    default: true
+  audio:
+    type: bool
+    label: Ton übertragen
+    default: true
+  transcode:
+    type: select
+    label: Umkodieren
+    help: >-
+      Normalerweise wird das Bild des Senders unverändert durchgereicht (geringste Verzögerung). Nur umkodieren, wenn ein
+      Bildschirm AirPlay-Bilder nicht abspielt (z. B. alte Kiosk-Browser ohne H.264 High Profile).
+    default: "off"
+    choices:
+      - { value: "off", label: Aus – unverändert durchreichen (empfohlen) }
+      - { value: cpu, label: CPU (x264) }
+      - { value: vaapi, label: Intel/AMD-Grafik (VA-API) }
+  bitrate:
+    type: int
+    label: Bitrate beim Umkodieren (kbit/s)
+    default: 6000
+    min: 500
+    max: 20000
+  resolution:
+    type: select
+    label: AirPlay-Auflösung
+    help: Auflösung, die der Empfänger bei Apple-Geräten anfragt.
+    default: "1080"
+    choices:
+      - { value: "720", label: 720p (1280×720) }
+      - { value: "1080", label: 1080p (1920×1080) }
+  fps:
+    type: select
+    label: AirPlay-Bildrate (höchstens)
+    default: "30"
+    choices: ["25", "30", "60"]
+  webrtcPort:
+    type: int
+    label: Port WebRTC (HTTP)
+    default: 8899
+    min: 1024
+    max: 65535
+  mediaPort:
+    type: int
+    label: Port WebRTC-Medien (UDP/TCP)
+    default: 8199
+    min: 1024
+    max: 65535
+  sharePort:
+    type: int
+    label: Port Freigabeseite (HTTPS)
+    help: Diese Adresse öffnen Rechner zum Teilen; sie steht auch als QR-Code auf der Kachel.
+    default: 8443
+    min: 1024
+    max: 65535
+  statusPort:
+    type: int
+    label: Port Status
+    default: 8898
+    min: 1024
+    max: 65535
+  airplayPort:
+    type: int
+    label: Erster AirPlay-Port
+    help: Jeder Empfänger belegt drei Ports (TCP und UDP) ab hier, der zweite die drei folgenden usw.
+    default: 7100
+    min: 1024
+    max: 65000
+  rtspPort:
+    type: int
+    label: Port RTSP (nur intern)
+    default: 8564
+    min: 1024
+    max: 65535
+  apiPort:
+    type: int
+    label: Port MediaMTX-API (nur intern)
+    default: 9987
+    min: 1024
+    max: 65535
+
+files:
+  volume: data
+  target: /addon
+  paths:
+    - mediamtx.yml
+
+# Zertifikat der Freigabeseite aus der ELVIS-CA (erneuert ELVIS selbst). Wer die CA installiert (Download in der
+# Seitenleiste von ELVIS), teilt ohne Zertifikatswarnung.
+tls:
+  volume: data
+  target: /elvis-tls
+
+builds:
+  receiver:
+    context: docker
+    files: [Dockerfile, receiver.py, share.html]
+    label: einmalig, ca. 3–8 Minuten
+
+containers:
+  - name: mediamtx
+    image: bluenviron/mediamtx:1.21.2
+    command: ["/data/addon/mediamtx.yml"]
+    network: host
+    volumes:
+      - { name: data, target: /data, readOnly: true }
+    env:
+      MTX_RTSPADDRESS: "127.0.0.1:{{options.rtspPort}}"
+      MTX_APIADDRESS: "127.0.0.1:{{options.apiPort}}"
+      MTX_WEBRTCADDRESS: ":{{options.webrtcPort}}"
+      MTX_WEBRTCLOCALUDPADDRESS: ":{{options.mediaPort}}"
+      MTX_WEBRTCLOCALTCPADDRESS: ":{{options.mediaPort}}"
+      MTX_WEBRTCADDITIONALHOSTS: "{{host.address}}"
+  - name: receiver
+    image: build:receiver
+    network: host
+    volumes:
+      - { name: data, target: /data }
+    env:
+      RECEIVERS: "{{options.receivers}}"
+      AIRPLAY: "{{options.airplay}}"
+      BROWSER_SHARE: "{{options.browserShare}}"
+      AUDIO: "{{options.audio}}"
+      TRANSCODE: "{{options.transcode}}"
+      BITRATE: "{{options.bitrate}}"
+      RESOLUTION: "{{options.resolution}}"
+      FPS: "{{options.fps}}"
+      HOST_ADDRESS: "{{host.address}}"
+      SHARE_PORT: "{{options.sharePort}}"
+      STATUS_PORT: "{{options.statusPort}}"
+      AIRPLAY_PORT: "{{options.airplayPort}}"
+      RTSP_PORT: "{{options.rtspPort}}"
+      WEBRTC_PORT: "{{options.webrtcPort}}"
+      API_PORT: "{{options.apiPort}}"
+    devices:
+      - { path: /dev/dri, when: { option: transcode, equals: vaapi } }
+
+provides:
+  videoSources:
+    - id: screen
+      name: Bildschirmübertragung
+      status: "http://{{host.address}}:{{options.statusPort}}/status.json"
+      webrtc: "http://{{host.address}}:{{options.webrtcPort}}"

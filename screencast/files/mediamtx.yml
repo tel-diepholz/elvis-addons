@@ -1,0 +1,48 @@
+# MediaMTX für die Bildschirmübertragung: nimmt AirPlay (RTSP vom Empfänger) und Browser-Freigaben (WHIP über den
+# Proxy des Empfängers) von localhost an und verteilt sie per WebRTC an Browser. Ports und Adressen setzt das Addon
+# über MTX_*-Umgebungsvariablen.
+logLevel: info
+
+# Einspeisen und API nur vom Empfänger auf demselben Host (auch die Browser-Freigabe kommt über dessen Proxy),
+# Ansehen für alle im Netz
+authInternalUsers:
+  - user: any
+    pass:
+    ips: ["127.0.0.1", "::1"]
+    permissions:
+      - action: publish
+        path:
+      - action: api
+  - user: any
+    pass:
+    ips: []
+    permissions:
+      - action: read
+        path:
+
+api: true
+metrics: false
+pprof: false
+playback: false
+rtmp: false
+hls: false
+srt: false
+# sonst belegt MediaMTX zusätzlich 8892/8893 – Konflikt mit dem NDI-Gateway auf demselben Host
+moq: false
+
+rtsp: true
+rtspTransports: [tcp]
+rtspAddress: 127.0.0.1:8564
+
+webrtc: true
+webrtcAddress: :8899
+webrtcLocalUDPAddress: :8199
+webrtcLocalTCPAddress: :8199
+webrtcIPsFromInterfaces: true
+
+pathDefaults:
+  # Wer zuletzt sendet, ist zu sehen (z. B. Browser-Freigabe löst AirPlay ab)
+  overridePublisher: true
+
+paths:
+  all_others:
