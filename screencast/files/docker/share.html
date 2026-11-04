@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bildschirm teilen</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #fff; --text: #1b1f24; --muted: #5d6673; --line: #d8dce2;
+    --accent: #c8102e; --accent-text: #fff; --ok: #1f7a3a; --warn: #9a5b00;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #14171b; --card: #1d2126; --text: #e8eaed; --muted: #9aa3ad; --line: #333a42; --ok: #5cc27a; --warn: #f0b04a; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 560px; margin: 0 auto; padding: 32px 16px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  .lead { color: var(--muted); margin: 0 0 24px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
+  label { display: block; font-weight: 600; margin: 0 0 6px; }
+  .field { margin-bottom: 16px; }
+  select, input[type=text] { width: 100%; font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); }
+  .check { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; margin-bottom: 10px; }
+  .check input { margin-top: 4px; }
+  .check small { display: block; color: var(--muted); }
+  button { width: 100%; font: inherit; font-weight: 700; padding: 14px; border: 0; border-radius: 8px; background: var(--accent); color: var(--accent-text); cursor: pointer; margin-top: 8px; }
+  button.stop { background: var(--text); color: var(--bg); }
+  button:disabled { opacity: .5; cursor: default; }
+  .status { margin-top: 16px; min-height: 1.5em; color: var(--muted); }
+  .status.ok { color: var(--ok); font-weight: 600; }
+  .status.warn { color: var(--warn); }
+  video { width: 100%; border-radius: 8px; background: #000; margin-top: 16px; display: none; }
+  .hint { margin-top: 24px; color: var(--muted); font-size: .9rem; }
+  .hint p { margin: 0 0 8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Bildschirm teilen</h1>
+  <p class="lead">Euer Bildschirm erscheint auf dem gewählten Empfänger in ELVIS – ohne zusätzliche Software.</p>
+
+  <div class="card">
+    <div class="field">
+      <label for="receiver">Empfänger</label>
+      <select id="receiver"></select>
+    </div>
+    <div class="field">
+      <label for="name">Euer Name (wird auf dem Bildschirm angezeigt)</label>
+      <input id="name" type="text" maxlength="60" placeholder="z. B. Laptop Einsatzleitung" autocomplete="off">
+    </div>
+    <label class="check"><input id="motion" type="checkbox">
+      <span>Videos und Bewegung bevorzugen<small>Flüssiger statt schärfer – für Filme oder Drohnenbilder. Für Folien und Karten aus lassen.</small></span>
+    </label>
+    <label class="check" id="audioRow"><input id="audio" type="checkbox" checked>
+      <span>Ton mitsenden<small>Je nach Browser nur beim Teilen eines Tabs oder des ganzen Bildschirms.</small></span>
+    </label>
+    <button id="start" type="button">Bildschirm teilen</button>
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+    <video id="preview" muted playsinline autoplay></video>
+  </div>
+
+  <div class="hint" id="hint">
+    <p><strong>iPhone, iPad, Mac:</strong> <span id="airplayHint"></span></p>
+    <p><strong>Windows, macOS, Linux:</strong> diese Seite in Edge, Chrome oder Firefox öffnen. Ohne Zertifikatswarnung geht das, wenn die ELVIS-CA installiert ist (in ELVIS: Seitenleiste → „Zertifikat installieren“).</p>
+    <p><strong>Android:</strong> Bildschirmfreigabe im Browser ist auf Handys nicht möglich.</p>
+  </div>
+</main>
+
+<script>
+(() => {
+  const CONFIG = /*CONFIG*/null || { receivers: [{ name: 'Leinwand', path: 'leinwand' }], audio: true, airplay: true };
+  const $ = (id) => document.getElementById(id);
+  const sel = $('receiver'), nameInput = $('name'), motion = $('motion'), audio = $('audio');
+  const btn = $('start'), statusEl = $('status'), preview = $('preview');
+
+  const store = {
+    get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
+    set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* privat */ } },
+  };
+
+  for (const r of CONFIG.receivers) sel.add(new Option(r.name, r.path));
+  const wanted = new URLSearchParams(location.search).get('r');
+  if (wanted && CONFIG.receivers.some((r) => r.path === wanted)) sel.value = wanted;
+  nameInput.value = store.get('screencast-name') || '';
+  motion.checked = store.get('screencast-motion') === '1';
+  if (!CONFIG.audio) $('audioRow').style.display = 'none';
+  $('airplayHint').textContent = CONFIG.airplay
+    ? `Kontrollzentrum → Bildschirmsynchronisierung → „${CONFIG.receivers.map((r) => r.name).join('“ oder „')}“.`
+    : 'AirPlay ist bei diesem Empfänger ausgeschaltet.';
+
+  const say = (text, tone = '') => { statusEl.textContent = text; statusEl.className = 'status ' + tone; };
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+    btn.disabled = true;
+    say(window.isSecureContext
+      ? 'Dieser Browser kann den Bildschirm nicht teilen. Bitte Edge, Chrome oder Firefox auf einem Rechner verwenden.'
+      : 'Bildschirmfreigabe geht nur über HTTPS – bitte die Adresse mit https:// öffnen.', 'warn');
+    return;
+  }
+
+  let pc = null, media = null, session = null;
+
+  async function stop(reason) {
+    const s = session;
+    session = null;
+    if (s) fetch(s, { method: 'DELETE', keepalive: true }).catch(() => {});
+    if (pc) pc.close();
+    pc = null;
+    if (media) media.getTracks().forEach((t) => t.stop());
+    media = null;
+    preview.style.display = 'none';
+    preview.srcObject = null;
+    btn.textContent = 'Bildschirm teilen';
+    btn.className = '';
+    btn.disabled = false;
+    sel.disabled = false;
+    if (reason) say(reason);
+  }
+
+  async function start() {
+    const path = sel.value;
+    const name = nameInput.value.trim();
+    store.set('screencast-name', name);
+    store.set('screencast-motion', motion.checked ? '1' : '0');
+    btn.disabled = true;
+    try {
+      media = await navigator.mediaDevices.getDisplayMedia({
+        video: { frameRate: { ideal: 30, max: 30 } },
+        audio: CONFIG.audio && audio.checked,
+        selfBrowserSurface: 'exclude',
+        surfaceSwitching: 'include',
+      });
+    } catch (err) {
+      btn.disabled = false;
+      say(err && err.name === 'NotAllowedError' ? 'Freigabe abgebrochen.' : `Freigabe nicht möglich: ${err.message || err}`, 'warn');
+      return;
+    }
+    const video = media.getVideoTracks()[0];
+    if ('contentHint' in video) video.contentHint = motion.checked ? 'motion' : 'detail';
+    video.addEventListener('ended', () => stop('Freigabe beendet.'));
+    preview.srcObject = media;
+    preview.style.display = 'block';
+    sel.disabled = true;
+    say('Verbinde …');
+
+    try {
+      pc = new RTCPeerConnection();
+      for (const track of media.getTracks()) {
+        const tr = pc.addTransceiver(track, { direction: 'sendonly', streams: [media] });
+        if (track.kind === 'video') {
+          // H.264 zuerst: Bildschirme dekodieren es meist in Hardware; sonst nimmt der Browser VP8/VP9/AV1
+          const caps = RTCRtpSender.getCapabilities && RTCRtpSender.getCapabilities('video');
+          if (caps && tr.setCodecPreferences) {
+            const h264 = caps.codecs.filter((c) => /h264/i.test(c.mimeType) && /packetization-mode=1/.test(c.sdpFmtpLine || ''));
+            const rest = caps.codecs.filter((c) => !h264.includes(c));
+            try { tr.setCodecPreferences([...h264, ...rest]); } catch { /* egal */ }
+          }
+          const params = tr.sender.getParameters();
+          params.degradationPreference = motion.checked ? 'maintain-framerate' : 'maintain-resolution';
+          params.encodings = (params.encodings && params.encodings.length ? params.encodings : [{}]).map((e) => ({ ...e, maxBitrate: 8_000_000, maxFramerate: 30 }));
+          tr.sender.setParameters(params).catch(() => {});
+        }
+      }
+      pc.addEventListener('connectionstatechange', () => {
+        if (!pc) return;
+        if (pc.connectionState === 'connected') {
+          btn.disabled = false;
+          say(`Wird auf „${sel.options[sel.selectedIndex].text}“ gezeigt.`, 'ok');
+        } else if (pc.connectionState === 'failed') {
+          stop('Verbindung zum Empfänger verloren – bitte erneut teilen.');
+        }
+      });
+      await pc.setLocalDescription(await pc.createOffer());
+      // ohne Trickle-ICE: kurz auf die eigenen Kandidaten warten
+      await new Promise((resolve) => {
+        if (pc.iceGatheringState === 'complete') return resolve();
+        const t = setTimeout(resolve, 1500);
+        pc.addEventListener('icegatheringstatechange', () => pc.iceGatheringState === 'complete' && (clearTimeout(t), resolve()));
+      });
+      const res = await fetch(`/${encodeURIComponent(path)}/whip?name=${encodeURIComponent(name)}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/sdp' }, body: pc.localDescription.sdp,
+      });
+      if (res.status !== 201) throw new Error(`Empfänger antwortet mit HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
+      const loc = res.headers.get('Location');
+      session = loc ? new URL(loc, location.href).href : null;
+      await pc.setRemoteDescription({ type: 'answer', sdp: await res.text() });
+      btn.textContent = 'Teilen beenden';
+      btn.className = 'stop';
+      btn.disabled = false;
+    } catch (err) {
+      stop(`Teilen fehlgeschlagen: ${err.message || err}`);
+      statusEl.className = 'status warn';
+    }
+  }
+
+  btn.addEventListener('click', () => (pc ? stop('Freigabe beendet.') : start()));
+  window.addEventListener('pagehide', () => { if (session) fetch(session, { method: 'DELETE', keepalive: true }).catch(() => {}); });
+})();
+</script>
+</body>
+</html>

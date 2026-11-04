@@ -4,6 +4,7 @@ addons:
   - hello
   - osm-daten
   - ndi-gateway
+  - screencast
   - collabora
   - druckserver
   - arbeitsplatz
