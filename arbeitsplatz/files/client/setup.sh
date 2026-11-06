@@ -24,6 +24,22 @@ apt_install firefox firefox-l10n-de
 # Firmware-Updates nur auf Auftrag aus ELVIS (fwupd-refresh bleibt maskiert)
 apt_install fwupd
 
+# --- Deskflow (optional): Tastatur/Maus über mehrere Rechner teilen; für Ubuntu 24.04 gibt es nur das Flatpak ---
+if [ "${DESKFLOW:-false}" = "true" ]; then
+  DESKFLOW_VERSION=1.27.0
+  DF_URL="https://github.com/deskflow/deskflow/releases/download/v$DESKFLOW_VERSION"
+  DF_FILE="deskflow-$DESKFLOW_VERSION-linux-x86_64.flatpak"
+  apt_install flatpak
+  curl -fsSL -o "/tmp/$DF_FILE" "$DF_URL/$DF_FILE"
+  curl -fsSL -o /tmp/deskflow-sums.txt "$DF_URL/sums.txt"
+  (cd /tmp && grep " \*\?$DF_FILE\$" deskflow-sums.txt | sha256sum -c -)
+  # Laufzeit (org.kde.Platform) kommt von Flathub; danach läuft alles offline, systemweit für alle Profile
+  flatpak remote-add --system --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+  flatpak install --system -y --noninteractive --bundle "/tmp/$DF_FILE"
+  flatpak remote-delete --system flathub || true
+  rm -f "/tmp/$DF_FILE" /tmp/deskflow-sums.txt
+fi
+
 # --- Windows-11-Optik: Fluent (vinceliuice, GPL-3.0) für Plasma, GTK, Symbole und Kvantum ---
 FLUENT=/tmp/fluent
 rm -rf "$FLUENT" && mkdir -p "$FLUENT"
