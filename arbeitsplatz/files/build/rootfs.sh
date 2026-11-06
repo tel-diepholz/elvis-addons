@@ -38,7 +38,7 @@ mmdebstrap --mode=root --variant=apt --format=directory \
   --essential-hook='echo "ELVIS_PROGRESS 15 Pakete installieren"' \
   --customize-hook='echo "ELVIS_PROGRESS 70 Einrichten"' \
   --customize-hook="mkdir -p \"\$1/tmp/elvis\" && cp -a $SRC/. \"\$1/tmp/elvis/\"" \
-  --customize-hook="chroot \"\$1\" env TIMEZONE='${TIMEZONE:-Europe/Berlin}' sh /tmp/elvis/setup.sh" \
+  --customize-hook="chroot \"\$1\" env TIMEZONE='${TIMEZONE:-Europe/Berlin}' DESKFLOW='${DESKFLOW:-false}' sh /tmp/elvis/setup.sh" \
   --customize-hook='rm -rf "$1/tmp/elvis"' \
   "$REL" "$WORK" \
   "deb $MIRROR $REL main restricted universe multiverse" \
